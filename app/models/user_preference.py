@@ -1,6 +1,13 @@
 import uuid
 
-from sqlalchemy import Column, DateTime, ForeignKey, String
+from sqlalchemy import (
+    Column,
+    DateTime,
+    ForeignKey,
+    Index,
+    String
+)
+
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
@@ -10,6 +17,17 @@ from app.db.base import Base
 
 class UserPreference(Base):
     __tablename__ = "user_preferences"
+
+    __table_args__ = (
+        Index(
+            "idx_user_preference_category",
+            "preferred_category_id"
+        ),
+        Index(
+            "idx_user_preference_vendor",
+            "favorite_vendor_id"
+        ),
+    )
 
     preference_id = Column(
         UUID(as_uuid=True),

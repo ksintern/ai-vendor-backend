@@ -1,6 +1,15 @@
 import uuid
 
-from sqlalchemy import Boolean, Column, DateTime, ForeignKey, String, Text
+from sqlalchemy import (
+    Boolean,
+    Column,
+    DateTime,
+    ForeignKey,
+    Index,
+    String,
+    Text
+)
+
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
@@ -10,6 +19,17 @@ from app.db.base import Base
 
 class Conversation(Base):
     __tablename__ = "conversations"
+
+    __table_args__ = (
+        Index("idx_conversation_session", "session_id"),
+        Index("idx_conversation_user", "user_id"),
+        Index("idx_conversation_intent", "detected_intent"),
+        Index(
+            "idx_conversation_user_created",
+            "user_id",
+            "created_at"
+        ),
+    )
 
     conversation_id = Column(
         UUID(as_uuid=True),
