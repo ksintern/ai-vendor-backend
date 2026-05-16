@@ -6,6 +6,7 @@ from sqlalchemy import (
     DateTime,
     Float,
     ForeignKey,
+    Index,
     Integer,
     String,
     Text,
@@ -19,6 +20,17 @@ from app.db.base import Base
 
 class Vendor(Base):
     __tablename__ = "vendors"
+
+    __table_args__ = (
+        Index("idx_vendor_category", "category_id"),
+        Index("idx_vendor_subcategory", "subcategory_id"),
+        Index("idx_vendor_city", "city"),
+        Index("idx_vendor_price_min", "price_min"),
+        Index("idx_vendor_price_max", "price_max"),
+        Index("idx_vendor_avg_rating", "avg_rating"),
+        Index("idx_vendor_category_city", "category_id", "city"),
+        Index("idx_vendor_subcategory_city", "subcategory_id", "city"),
+    )
 
     vendor_id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
 

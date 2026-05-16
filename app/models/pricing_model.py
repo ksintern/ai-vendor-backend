@@ -1,6 +1,16 @@
+import enum
 import uuid
 
-from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import (
+    Boolean,
+    Column,
+    DateTime,
+    Enum,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+)
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
@@ -8,29 +18,70 @@ from sqlalchemy.sql import func
 from app.db.base import Base
 
 
+class PricingType(str, enum.Enum):
+    FIXED = "fixed"
+    HOURLY = "hourly"
+    PACKAGE = "package"
+    CUSTOM = "custom"
+
+
 class PricingModel(Base):
     __tablename__ = "pricing_models"
 
-    pricing_id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    pricing_id = Column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4
+    )
 
     vendor_id = Column(
-        UUID(as_uuid=True), ForeignKey("vendors.vendor_id"), nullable=False
+        UUID(as_uuid=True),
+        ForeignKey("vendors.vendor_id"),
+        nullable=False
     )
 
-    title = Column(String, nullable=False)
+    title = Column(
+        String,
+        nullable=False
+    )
 
-    description = Column(Text, nullable=True)
+    description = Column(
+        Text,
+        nullable=True
+    )
 
-    price = Column(Integer, nullable=False)
+    price = Column(
+        Integer,
+        nullable=False
+    )
 
-    pricing_type = Column(String, nullable=False)
+    currency = Column(
+        String,
+        default="INR"
+    )
 
-    is_active = Column(Boolean, default=True)
+    pricing_type = Column(
+        Enum(PricingType),
+        nullable=False
+    )
 
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    is_active = Column(
+        Boolean,
+        default=True
+    )
+
+    created_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now()
+    )
 
     updated_at = Column(
-        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now()
     )
 
-    vendor = relationship("Vendor", back_populates="pricing_models")
+    vendor = relationship(
+        "Vendor",
+        back_populates="pricing_models"
+    )
