@@ -10,8 +10,8 @@ from sqlalchemy import (
     String,
     Text,
 )
+
 from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 
 from app.db.base import Base
@@ -81,12 +81,14 @@ class Review(Base):
         onupdate=func.now()
     )
 
-    vendor = relationship(
-        "Vendor",
-        back_populates="reviews"
-    )
+    # TEMPORARILY COMMENTED FOR AUTH MODULE TESTING
 
-    user = relationship(
-        "User",
-        back_populates="reviews"
-    )
+    # vendor = relationship(
+    #     "Vendor",
+    #     back_populates="reviews"
+    # )
+
+    # user = relationship(
+    #     "User",
+    #     back_populates="reviews"
+    # )

@@ -1,11 +1,18 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-app = FastAPI()
+from app.api.routes.auth import router as auth_router
+
+
+app = FastAPI(
+    title="AI Vendor Discovery Agent API"
+)
+
 
 origins = [
     "http://localhost:5173",
 ]
+
 
 app.add_middleware(
     CORSMiddleware,
@@ -16,6 +23,14 @@ app.add_middleware(
 )
 
 
+# Root Route
 @app.get("/")
 def home():
-    return {"message": "AI Vendor Discovery Agent Backend Running"}
+
+    return {
+        "message": "AI Vendor Discovery Agent Backend Running"
+    }
+
+
+# Authentication Routes
+app.include_router(auth_router)
