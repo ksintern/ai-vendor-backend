@@ -17,7 +17,8 @@ from app.schemas.auth_schema import (
 from app.core.security import (
     verify_password,
     hash_password,
-    create_access_token
+    create_access_token,
+    create_refresh_token
 )
 
 
@@ -29,13 +30,16 @@ def register_user(
     username: str,
     full_name: str,
     email: str,
+    business_email: str | None,
     phone_number: str | None,
+    role: str,
     password: str,
     confirm_password: str,
     db: Session
 ) -> RegisterResponse:
 
-    # Check existing email
+    # CHECK EXISTING EMAIL
+
     existing_email = db.query(User).filter(
         User.email == email
     ).first()
@@ -47,7 +51,8 @@ def register_user(
             detail="Email already registered"
         )
 
-    # Check existing username
+    # CHECK EXISTING USERNAME
+
     existing_username = db.query(User).filter(
         User.username == username
     ).first()
@@ -59,7 +64,8 @@ def register_user(
             detail="Username already taken"
         )
 
-    # Password confirmation check
+    # PASSWORD CONFIRMATION CHECK
+
     if password != confirm_password:
 
         raise HTTPException(
@@ -67,17 +73,32 @@ def register_user(
             detail="Passwords do not match"
         )
 
-    # Hash password
+    # BUSINESS EMAIL REQUIRED FOR VENDORS
+
+    if role == "vendor" and not business_email:
+
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Business email is required for vendors"
+        )
+
+    # HASH PASSWORD
+
     hashed_password = hash_password(password)
 
-    # Create user
+    # CREATE USER
+
     new_user = User(
+
         username=username,
+
         full_name=full_name,
+
         email=email,
+
         phone_number=phone_number,
 
-        role="user",
+        role=role,
 
         password_hash=hashed_password
     )
@@ -94,14 +115,21 @@ def register_user(
     )
 
     return RegisterResponse(
+
         success=True,
+
         message="User registered successfully",
 
         user=UserResponse(
+
             user_id=UUID(str(new_user.user_id)),
+
             username=str(new_user.username),
+
             full_name=str(new_user.full_name),
+
             email=str(new_user.email),
+
             role=str(new_user.role),
 
             phone_number=str(new_user.phone_number)
@@ -109,7 +137,6 @@ def register_user(
             else None
         )
     )
-
 
 # -----------------------------
 # LOGIN USER
@@ -119,9 +146,10 @@ def login_user(
     identifier: str,
     password: str,
     db: Session
-) -> LoginResponse:
+):
 
-    # Login using username OR email
+    # LOGIN USING EMAIL OR USERNAME
+
     user = db.query(User).filter(
 
         or_(
@@ -131,7 +159,8 @@ def login_user(
 
     ).first()
 
-    # User not found
+    # USER NOT FOUND
+
     if not user:
 
         raise HTTPException(
@@ -139,7 +168,8 @@ def login_user(
             detail="User does not exist"
         )
 
-    # Verify password
+    # VERIFY PASSWORD
+
     is_valid_password = verify_password(
         password,
         str(user.password_hash)
@@ -152,7 +182,8 @@ def login_user(
             detail="Invalid credentials"
         )
 
-    # Inactive account check
+    # INACTIVE ACCOUNT CHECK
+
     if not bool(user.is_active):
 
         raise HTTPException(
@@ -160,11 +191,30 @@ def login_user(
             detail="User account is inactive"
         )
 
-    # Generate JWT token
+    # GENERATE ACCESS TOKEN
+
     access_token = create_access_token(
+
         data={
+
             "sub": str(user.email),
+
             "user_id": str(user.user_id),
+
+            "role": str(user.role)
+        }
+    )
+
+    # GENERATE REFRESH TOKEN
+
+    refresh_token = create_refresh_token(
+
+        data={
+
+            "sub": str(user.email),
+
+            "user_id": str(user.user_id),
+            
             "role": str(user.role)
         }
     )
@@ -174,22 +224,32 @@ def login_user(
         str(user.email)
     )
 
-    return LoginResponse(
-        success=True,
-        message="Login successful",
+    return {
 
-        access_token=access_token,
-        token_type="bearer",
+        "success": True,
 
-        user=UserResponse(
-            user_id=UUID(str(user.user_id)),
-            username=str(user.username),
-            full_name=str(user.full_name),
-            email=str(user.email),
-            role=str(user.role),
+        "message": "Login successful",
 
-            phone_number=str(user.phone_number)
+        "access_token": access_token,
+
+        "refresh_token": refresh_token,
+
+        "token_type": "bearer",
+
+        "user": {
+
+            "user_id": str(user.user_id),
+
+            "username": str(user.username),
+
+            "full_name": str(user.full_name),
+
+            "email": str(user.email),
+
+            "role": str(user.role),
+
+            "phone_number": str(user.phone_number)
             if user.phone_number is not None
             else None
-        )
-    )
+        }
+    }

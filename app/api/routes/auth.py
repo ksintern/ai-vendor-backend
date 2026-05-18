@@ -1,6 +1,10 @@
 from fastapi import (
     APIRouter,
-    Depends
+    Depends,
+    Response,
+    Request,
+    HTTPException,
+    status
 )
 
 from fastapi.security import (
@@ -8,6 +12,8 @@ from fastapi.security import (
 )
 
 from sqlalchemy.orm import Session
+
+from jose import jwt, JWTError
 
 from app.schemas.auth_schema import (
     LoginRequest,
@@ -30,6 +36,12 @@ from app.api.dependencies.auth_dependency import (
 
 from app.models.user import User
 
+from app.core.config import settings
+
+from app.core.security import (
+    create_access_token
+)
+
 
 router = APIRouter(
     prefix="/auth",
@@ -51,12 +63,23 @@ def register(
 ):
 
     return register_user(
+
         username=request.username,
+
         full_name=request.full_name,
+
         email=request.email,
+
+        business_email=request.business_email,
+
         phone_number=request.phone_number,
+
+        role=request.role,
+
         password=request.password,
+
         confirm_password=request.confirm_password,
+
         db=db
     )
 
@@ -66,20 +89,144 @@ def register(
 # JSON-BASED LOGIN
 # -----------------------------
 
-@router.post(
-    "/login",
-    response_model=LoginResponse
-)
+@router.post("/login")
 def login(
     request: LoginRequest,
+    response: Response,
     db: Session = Depends(get_db)
 ):
 
-    return login_user(
+    login_response = login_user(
+
         identifier=request.identifier,
+
         password=request.password,
+
         db=db
     )
+
+    # STORE REFRESH TOKEN
+    # IN HTTP-ONLY COOKIE
+
+    response.set_cookie(
+
+        key="refresh_token",
+
+        value=login_response["refresh_token"],
+
+        httponly=True,
+
+        secure=False,
+
+        samesite="lax",
+
+        max_age=60 * 60 * 24 * 7
+    )
+
+    # REMOVE REFRESH TOKEN
+    # FROM JSON RESPONSE
+
+    del login_response["refresh_token"]
+
+    return login_response
+
+
+# -----------------------------
+# REFRESH ACCESS TOKEN
+# -----------------------------
+
+@router.post("/refresh")
+def refresh_access_token(
+    request: Request
+):
+
+    refresh_token = request.cookies.get(
+        "refresh_token"
+    )
+
+    if not refresh_token:
+
+        raise HTTPException(
+
+            status_code=status.HTTP_401_UNAUTHORIZED,
+
+            detail="Refresh token missing"
+        )
+
+    try:
+
+        payload = jwt.decode(
+
+            refresh_token,
+
+            settings.SECRET_KEY,
+
+            algorithms=[settings.ALGORITHM]
+        )
+
+        # VALIDATE TOKEN TYPE
+
+        if payload.get("type") != "refresh":
+
+            raise HTTPException(
+
+                status_code=status.HTTP_401_UNAUTHORIZED,
+
+                detail="Invalid refresh token"
+            )
+
+        # CREATE NEW ACCESS TOKEN
+
+        access_token = create_access_token(
+
+            data={
+
+                "sub": payload.get("sub"),
+
+                "user_id": payload.get("user_id"),
+
+                "role": payload.get("role")
+            }
+        )
+
+        return {
+
+            "success": True,
+
+            "access_token": access_token,
+
+            "token_type": "bearer"
+        }
+
+    except JWTError:
+
+        raise HTTPException(
+
+            status_code=status.HTTP_401_UNAUTHORIZED,
+
+            detail="Invalid or expired refresh token"
+        )
+
+
+# -----------------------------
+# LOGOUT
+# -----------------------------
+
+@router.post("/logout")
+def logout(
+    response: Response
+):
+
+    response.delete_cookie(
+        key="refresh_token"
+    )
+
+    return {
+
+        "success": True,
+
+        "message": "Logged out successfully"
+    }
 
 
 # -----------------------------
@@ -97,8 +244,11 @@ def login_for_swagger(
 ):
 
     return login_user(
+
         identifier=form_data.username,
+
         password=form_data.password,
+
         db=db
     )
 
@@ -116,15 +266,23 @@ def get_logged_in_user(
 ):
 
     return {
+
         "success": True,
+
         "message": "Authenticated user fetched successfully",
 
         "user": {
+
             "user_id": str(current_user.user_id),
+
             "username": current_user.username,
+
             "full_name": current_user.full_name,
+
             "email": current_user.email,
+
             "phone_number": current_user.phone_number,
+
             "role": current_user.role
         }
     }
@@ -143,11 +301,42 @@ def admin_only_route(
 ):
 
     return {
+
         "success": True,
+
         "message": "Welcome Admin",
 
         "user": {
+
             "email": current_user.email,
+
+            "role": current_user.role
+        }
+    }
+
+
+# -----------------------------
+# VENDOR ONLY ROUTE
+# -----------------------------
+
+@router.get("/vendor-only")
+def vendor_only_route(
+
+    current_user: User = Depends(
+        require_role(["vendor"])
+    )
+):
+
+    return {
+
+        "success": True,
+
+        "message": "Welcome Vendor",
+
+        "user": {
+
+            "email": current_user.email,
+
             "role": current_user.role
         }
     }
@@ -166,11 +355,15 @@ def user_only_route(
 ):
 
     return {
+
         "success": True,
+
         "message": "Welcome User",
 
         "user": {
+
             "email": current_user.email,
+
             "role": current_user.role
         }
     }

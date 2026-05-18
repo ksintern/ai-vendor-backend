@@ -49,7 +49,9 @@ def get_current_user(
 
         email = payload.get("sub")
 
-        if email is None:
+        token_type = payload.get("type")
+
+        if email is None or token_type != "access":
 
             raise credentials_exception
 
@@ -93,3 +95,13 @@ def require_role(
         return current_user
 
     return role_checker
+
+admin_required = require_role(["admin"])
+
+vendor_required = require_role(["vendor"])
+
+user_required = require_role([
+    "admin",
+    "vendor",
+    "user"
+])

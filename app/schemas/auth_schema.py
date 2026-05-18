@@ -48,7 +48,11 @@ class RegisterRequest(BaseModel):
 
     email: EmailStr
 
+    business_email: EmailStr | None = None
+
     phone_number: str | None = None
+
+    role: str = "user"
 
     password: str = Field(
         min_length=8,
@@ -99,6 +103,31 @@ class RegisterRequest(BaseModel):
                 raise ValueError(
                     "Phone number must contain exactly 10 digits"
                 )
+
+        return value
+
+
+    # -----------------------------
+    # ROLE VALIDATION
+    # -----------------------------
+
+    @field_validator("role")
+    @classmethod
+    def validate_role(
+        cls,
+        value: str
+    ):
+
+        allowed_roles = [
+            "user",
+            "vendor"
+        ]
+
+        if value not in allowed_roles:
+
+            raise ValueError(
+                "Invalid role selected"
+            )
 
         return value
 
