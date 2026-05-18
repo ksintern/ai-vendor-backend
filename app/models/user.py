@@ -1,7 +1,14 @@
 import uuid
 
-from sqlalchemy import Boolean, Column, DateTime, String
+from sqlalchemy import (
+    Boolean,
+    Column,
+    DateTime,
+    String
+)
+
 from sqlalchemy.dialects.postgresql import UUID
+
 from sqlalchemy.sql import func
 
 from app.db.base import Base
@@ -30,6 +37,13 @@ class User(Base):
     phone_number = Column(
         String,
         nullable=True
+    )
+
+    # NEW ROLE FIELD
+    role = Column(
+        String,
+        nullable=False,
+        default="user"
     )
 
     password_hash = Column(
