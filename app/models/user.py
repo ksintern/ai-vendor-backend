@@ -28,6 +28,13 @@ class User(Base):
         nullable=False
     )
 
+    # NEW USERNAME FIELD
+    username = Column(
+        String,
+        unique=True,
+        nullable=False
+    )
+
     email = Column(
         String,
         unique=True,
@@ -39,7 +46,7 @@ class User(Base):
         nullable=True
     )
 
-    # NEW ROLE FIELD
+    # ROLE FIELD
     role = Column(
         String,
         nullable=False,

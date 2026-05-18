@@ -4,6 +4,8 @@ from fastapi import HTTPException, status
 
 from sqlalchemy.orm import Session
 
+from sqlalchemy import or_
+
 from app.models.user import User
 
 from app.schemas.auth_schema import (
@@ -24,6 +26,7 @@ from app.core.security import (
 # -----------------------------
 
 def register_user(
+    username: str,
     full_name: str,
     email: str,
     phone_number: str | None,
@@ -32,16 +35,28 @@ def register_user(
     db: Session
 ) -> RegisterResponse:
 
-    # Check existing user
-    existing_user = db.query(User).filter(
+    # Check existing email
+    existing_email = db.query(User).filter(
         User.email == email
     ).first()
 
-    if existing_user:
+    if existing_email:
 
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Email already registered"
+        )
+
+    # Check existing username
+    existing_username = db.query(User).filter(
+        User.username == username
+    ).first()
+
+    if existing_username:
+
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Username already taken"
         )
 
     # Password confirmation check
@@ -55,13 +70,13 @@ def register_user(
     # Hash password
     hashed_password = hash_password(password)
 
-    # Create new user
+    # Create user
     new_user = User(
+        username=username,
         full_name=full_name,
         email=email,
         phone_number=phone_number,
 
-        # Default RBAC-ready role
         role="user",
 
         password_hash=hashed_password
@@ -84,8 +99,10 @@ def register_user(
 
         user=UserResponse(
             user_id=UUID(str(new_user.user_id)),
+            username=str(new_user.username),
             full_name=str(new_user.full_name),
             email=str(new_user.email),
+            role=str(new_user.role),
 
             phone_number=str(new_user.phone_number)
             if new_user.phone_number is not None
@@ -99,14 +116,19 @@ def register_user(
 # -----------------------------
 
 def login_user(
-    email: str,
+    identifier: str,
     password: str,
     db: Session
 ) -> LoginResponse:
 
-    # Find user by email
+    # Login using username OR email
     user = db.query(User).filter(
-        User.email == email
+
+        or_(
+            User.email == identifier,
+            User.username == identifier
+        )
+
     ).first()
 
     # User not found
@@ -123,12 +145,11 @@ def login_user(
         str(user.password_hash)
     )
 
-    # Invalid credentials
     if not is_valid_password:
 
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid email or password"
+            detail="Invalid credentials"
         )
 
     # Inactive account check
@@ -144,8 +165,6 @@ def login_user(
         data={
             "sub": str(user.email),
             "user_id": str(user.user_id),
-
-            # RBAC-ready token payload
             "role": str(user.role)
         }
     )
@@ -164,8 +183,10 @@ def login_user(
 
         user=UserResponse(
             user_id=UUID(str(user.user_id)),
+            username=str(user.username),
             full_name=str(user.full_name),
             email=str(user.email),
+            role=str(user.role),
 
             phone_number=str(user.phone_number)
             if user.phone_number is not None
