@@ -85,8 +85,63 @@ def register(
 
 
 # -----------------------------
+# CHECK USERNAME AVAILABILITY
+# -----------------------------
+
+@router.get("/check-username/{username}")
+def check_username(
+    username: str,
+    db: Session = Depends(get_db)
+):
+
+    existing_user = db.query(User).filter(
+        User.username.ilike(username)
+    ).first()
+
+    return {
+
+        "available": existing_user is None,
+
+        "message":
+
+            "Username available"
+
+            if existing_user is None
+
+            else "Username already taken"
+    }
+
+
+# -----------------------------
+# CHECK EMAIL AVAILABILITY
+# -----------------------------
+
+@router.get("/check-email/{email}")
+def check_email(
+    email: str,
+    db: Session = Depends(get_db)
+):
+
+    existing_user = db.query(User).filter(
+        User.email.ilike(email)
+    ).first()
+
+    return {
+
+        "available": existing_user is None,
+
+        "message":
+
+            "Email available"
+
+            if existing_user is None
+
+            else "Email already registered"
+    }
+
+
+# -----------------------------
 # FRONTEND LOGIN API
-# JSON-BASED LOGIN
 # -----------------------------
 
 @router.post("/login")
@@ -105,8 +160,9 @@ def login(
         db=db
     )
 
-    # STORE REFRESH TOKEN
-    # IN HTTP-ONLY COOKIE
+    # --------------------------------
+    # STORE REFRESH TOKEN COOKIE
+    # --------------------------------
 
     response.set_cookie(
 
@@ -120,11 +176,15 @@ def login(
 
         samesite="lax",
 
+        path="/",
+
         max_age=60 * 60 * 24 * 7
     )
 
+    # --------------------------------
     # REMOVE REFRESH TOKEN
-    # FROM JSON RESPONSE
+    # FROM RESPONSE BODY
+    # --------------------------------
 
     del login_response["refresh_token"]
 
@@ -164,7 +224,9 @@ def refresh_access_token(
             algorithms=[settings.ALGORITHM]
         )
 
+        # --------------------------------
         # VALIDATE TOKEN TYPE
+        # --------------------------------
 
         if payload.get("type") != "refresh":
 
@@ -175,7 +237,9 @@ def refresh_access_token(
                 detail="Invalid refresh token"
             )
 
+        # --------------------------------
         # CREATE NEW ACCESS TOKEN
+        # --------------------------------
 
         access_token = create_access_token(
 
@@ -218,7 +282,10 @@ def logout(
 ):
 
     response.delete_cookie(
-        key="refresh_token"
+
+        key="refresh_token",
+
+        path="/"
     )
 
     return {
@@ -230,8 +297,7 @@ def logout(
 
 
 # -----------------------------
-# SWAGGER / OAUTH LOGIN
-# FORM-DATA LOGIN
+# SWAGGER LOGIN
 # -----------------------------
 
 @router.post(
@@ -254,7 +320,7 @@ def login_for_swagger(
 
 
 # -----------------------------
-# CURRENT AUTHENTICATED USER
+# CURRENT USER
 # -----------------------------
 
 @router.get("/me")
@@ -289,7 +355,7 @@ def get_logged_in_user(
 
 
 # -----------------------------
-# ADMIN ONLY ROUTE
+# ADMIN ONLY
 # -----------------------------
 
 @router.get("/admin-only")
@@ -316,7 +382,7 @@ def admin_only_route(
 
 
 # -----------------------------
-# VENDOR ONLY ROUTE
+# VENDOR ONLY
 # -----------------------------
 
 @router.get("/vendor-only")
@@ -343,7 +409,7 @@ def vendor_only_route(
 
 
 # -----------------------------
-# USER ONLY ROUTE
+# USER ONLY
 # -----------------------------
 
 @router.get("/user-only")

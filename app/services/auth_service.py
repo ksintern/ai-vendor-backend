@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import or_
 
 from app.models.user import User
+from app.models.vendor import Vendor
 
 from app.schemas.auth_schema import (
     LoginResponse,
@@ -109,6 +110,45 @@ def register_user(
 
     db.refresh(new_user)
 
+    # --------------------------------
+    # AUTO CREATE VENDOR PROFILE
+    # --------------------------------
+
+    if role == "vendor":
+
+        vendor = Vendor(
+
+            user_id=new_user.user_id,
+
+            name=full_name,
+
+            slug=None,
+
+            description="",
+
+            category_id=None,
+
+            subcategory_id=None,
+
+            city=None,
+
+            address="",
+
+            business_email=business_email,
+
+            contact_phone=phone_number if phone_number else "",
+
+            price_min=None,
+
+            price_max=None
+        )
+
+        db.add(vendor)
+
+        db.commit()
+
+        db.refresh(vendor)
+
     print(
         "User registered successfully:",
         str(new_user.email)
@@ -137,6 +177,7 @@ def register_user(
             else None
         )
     )
+
 
 # -----------------------------
 # LOGIN USER
@@ -214,7 +255,7 @@ def login_user(
             "sub": str(user.email),
 
             "user_id": str(user.user_id),
-            
+
             "role": str(user.role)
         }
     )

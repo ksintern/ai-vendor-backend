@@ -1,97 +1,343 @@
-import uuid
+from uuid import uuid4
 
 from sqlalchemy import (
-    Boolean,
     Column,
-    DateTime,
-    Float,
-    ForeignKey,
-    Index,
-    Integer,
     String,
-    Text,
+    Boolean,
+    Integer,
+    ForeignKey
 )
-from sqlalchemy.dialects.postgresql import UUID
+
 from sqlalchemy.orm import relationship
-from sqlalchemy.sql import func
+
+from sqlalchemy.dialects.postgresql import UUID
 
 from app.db.base import Base
 
+from app.models.vendor_service import VendorService
+from app.models.review import Review
+from app.models.pricing_model import PricingModel
+from app.models.vendor_media import VendorMedia
+from app.models.viewed_vendor import ViewedVendor
+
 
 class Vendor(Base):
+
     __tablename__ = "vendors"
 
-    __table_args__ = (
-        Index("idx_vendor_category", "category_id"),
-        Index("idx_vendor_subcategory", "subcategory_id"),
-        Index("idx_vendor_city", "city"),
-        Index("idx_vendor_price_min", "price_min"),
-        Index("idx_vendor_price_max", "price_max"),
-        Index("idx_vendor_avg_rating", "avg_rating"),
-        Index("idx_vendor_category_city", "category_id", "city"),
-        Index("idx_vendor_subcategory_city", "subcategory_id", "city"),
+
+    # =====================================================
+    # PRIMARY KEY
+    # =====================================================
+
+    vendor_id = Column(
+
+        UUID(as_uuid=True),
+
+        primary_key=True,
+
+        default=uuid4
     )
 
-    vendor_id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
 
-    name = Column(String, nullable=False)
+    # =====================================================
+    # USER RELATION
+    # =====================================================
 
-    description = Column(Text, nullable=True)
+    user_id = Column(
+
+        UUID(as_uuid=True),
+
+        ForeignKey(
+            "users.user_id"
+        ),
+
+        nullable=True,
+
+        unique=True
+    )
+
+
+    # =====================================================
+    # PARENT CHILD HIERARCHY
+    # =====================================================
+
+    parent_vendor_id = Column(
+
+        UUID(as_uuid=True),
+
+        ForeignKey(
+            "vendors.vendor_id"
+        ),
+
+        nullable=True
+    )
+
+
+    # =====================================================
+    # BASIC DETAILS
+    # =====================================================
+
+    name = Column(
+
+        String,
+
+        nullable=False
+    )
+
+    slug = Column(
+
+        String,
+
+        unique=True,
+
+        nullable=True
+    )
+
+    description = Column(
+
+        String,
+
+        nullable=True
+    )
+
+
+    # =====================================================
+    # CATEGORY
+    # =====================================================
 
     category_id = Column(
-        UUID(as_uuid=True), ForeignKey("categories.category_id"), nullable=False
+
+        UUID(as_uuid=True),
+
+        ForeignKey(
+            "categories.category_id"
+        ),
+
+        nullable=True
     )
 
     subcategory_id = Column(
-        UUID(as_uuid=True), ForeignKey("subcategories.subcategory_id"), nullable=False
+
+        UUID(as_uuid=True),
+
+        ForeignKey(
+            "subcategories.subcategory_id"
+        ),
+
+        nullable=True
     )
 
-    city = Column(String, nullable=False)
 
-    address = Column(Text, nullable=True)
+    # =====================================================
+    # LOCATION
+    # =====================================================
 
-    contact_email = Column(String, nullable=False)
+    city = Column(
 
-    contact_phone = Column(String, nullable=False)
+        String,
 
-    price_min = Column(Integer, nullable=True)
-
-    price_max = Column(Integer, nullable=True)
-
-    avg_rating = Column(Float, default=0.0)
-
-    review_count = Column(Integer, default=0)
-
-    is_available = Column(Boolean, default=True)
-
-    is_verified = Column(Boolean, default=False)
-
-    is_active = Column(Boolean, default=True)
-
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-
-    updated_at = Column(
-        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+        nullable=True
     )
 
-    category = relationship("Category", back_populates="vendors")
+    address = Column(
 
-    subcategory = relationship("Subcategory", back_populates="vendors")
+        String,
 
-    reviews = relationship("Review", back_populates="vendor")
-
-    services = relationship("VendorService", back_populates="vendor")
-
-    pricing_models = relationship("PricingModel", back_populates="vendor")
-
-    media = relationship("VendorMedia", back_populates="vendor")
-
-    viewed_by = relationship("ViewedVendor", back_populates="vendor")
-
-    recommendation_metadata = relationship(
-        "RecommendationMetadata", back_populates="vendor", uselist=False
+        nullable=True
     )
 
-    semantic_embedding = relationship(
-        "SemanticEmbedding", back_populates="vendor", uselist=False
+
+    # =====================================================
+    # CONTACT
+    # =====================================================
+
+    business_email = Column(
+
+        String,
+
+        nullable=False
+    )
+
+    contact_phone = Column(
+
+        String,
+
+        nullable=False
+    )
+
+
+    # =====================================================
+    # PRICING
+    # =====================================================
+
+    price_min = Column(
+
+        Integer,
+
+        nullable=True
+    )
+
+    price_max = Column(
+
+        Integer,
+
+        nullable=True
+    )
+
+
+    # =====================================================
+    # REVIEW SUMMARY
+    # =====================================================
+
+    avg_rating = Column(
+
+        Integer,
+
+        default=0
+    )
+
+    review_count = Column(
+
+        Integer,
+
+        default=0
+    )
+
+
+    # =====================================================
+    # STATUS
+    # =====================================================
+
+    is_available = Column(
+
+        Boolean,
+
+        default=True
+    )
+
+    is_verified = Column(
+
+        Boolean,
+
+        default=False
+    )
+
+    is_active = Column(
+
+        Boolean,
+
+        default=True
+    )
+
+
+    # =====================================================
+    # RELATIONSHIPS
+    # =====================================================
+
+    user = relationship(
+
+        "User",
+
+        back_populates="vendor"
+    )
+
+
+    category = relationship(
+
+        "Category"
+    )
+
+
+    subcategory = relationship(
+
+        "Subcategory"
+    )
+
+
+    reviews = relationship(
+
+        "Review",
+
+        back_populates="vendor",
+
+        cascade="all, delete-orphan"
+    )
+
+
+    pricing_models = relationship(
+
+        "PricingModel",
+
+        back_populates="vendor",
+
+        cascade="all, delete-orphan"
+    )
+
+
+    services = relationship(
+
+        "VendorService",
+
+        back_populates="vendor",
+
+        cascade="all, delete-orphan"
+    )
+
+
+    media = relationship(
+
+        "VendorMedia",
+
+        back_populates="vendor",
+
+        cascade="all, delete-orphan"
+    )
+
+
+    viewed_by = relationship(
+
+        "ViewedVendor",
+
+        back_populates="vendor",
+
+        cascade="all, delete-orphan"
+    )
+
+
+    # =====================================================
+    # PARENT VENDOR
+    # =====================================================
+
+    parent_vendor = relationship(
+
+        "Vendor",
+
+        remote_side=[
+
+            vendor_id
+
+        ],
+
+        back_populates=
+
+        "managed_teams"
+    )
+
+
+    # =====================================================
+    # MANAGED INTERNAL TEAMS
+    # =====================================================
+
+    managed_teams = relationship(
+
+        "Vendor",
+
+        back_populates=
+
+        "parent_vendor",
+
+        cascade=
+
+        "all, delete-orphan"
     )

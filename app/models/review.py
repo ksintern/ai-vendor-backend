@@ -12,6 +12,7 @@ from sqlalchemy import (
 )
 
 from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 
 from app.db.base import Base
@@ -83,12 +84,12 @@ class Review(Base):
 
     # TEMPORARILY COMMENTED FOR AUTH MODULE TESTING
 
-    # vendor = relationship(
-    #     "Vendor",
-    #     back_populates="reviews"
-    # )
+    vendor = relationship(
+        "Vendor",
+        back_populates="reviews"
+     )
 
-    # user = relationship(
-    #     "User",
-    #     back_populates="reviews"
-    # )
+    user = relationship(
+        "User",
+        back_populates="reviews"
+    )

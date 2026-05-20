@@ -7,10 +7,12 @@ from pydantic import (
 
 
 # -----------------------------
-# CATEGORY BASE
+# SUBCATEGORY BASE
 # -----------------------------
 
-class CategoryBase(BaseModel):
+class SubcategoryBase(BaseModel):
+
+    category_id: UUID
 
     name: str = Field(
         min_length=2,
@@ -26,19 +28,25 @@ class CategoryBase(BaseModel):
 
 
 # -----------------------------
-# CREATE CATEGORY
+# CREATE SUBCATEGORY
 # -----------------------------
 
-class CategoryCreateRequest(CategoryBase):
+class SubcategoryCreateRequest(
+    SubcategoryBase
+):
 
     pass
 
 
 # -----------------------------
-# UPDATE CATEGORY
+# UPDATE SUBCATEGORY
 # -----------------------------
 
-class CategoryUpdateRequest(BaseModel):
+class SubcategoryUpdateRequest(
+    BaseModel
+):
+
+    category_id: UUID | None = None
 
     name: str | None = Field(
         default=None,
@@ -58,12 +66,14 @@ class CategoryUpdateRequest(BaseModel):
 
 
 # -----------------------------
-# CATEGORY RESPONSE
+# SUBCATEGORY RESPONSE
 # -----------------------------
 
-class CategoryResponse(CategoryBase):
+class SubcategoryResponse(
+    SubcategoryBase
+):
 
-    category_id: UUID
+    subcategory_id: UUID
 
     is_active: bool
 
@@ -73,26 +83,32 @@ class CategoryResponse(CategoryBase):
 
 
 # -----------------------------
-# SINGLE CATEGORY RESPONSE
+# SINGLE SUBCATEGORY RESPONSE
 # -----------------------------
 
-class CategoryDetailResponse(BaseModel):
+class SubcategoryDetailResponse(
+    BaseModel
+):
 
     success: bool
 
     message: str
 
-    category: CategoryResponse
+    subcategory: SubcategoryResponse
 
 
 # -----------------------------
-# CATEGORY LIST RESPONSE
+# SUBCATEGORY LIST RESPONSE
 # -----------------------------
 
-class CategoryListResponse(BaseModel):
+class SubcategoryListResponse(
+    BaseModel
+):
 
     success: bool
 
     message: str
 
-    categories: list[CategoryResponse]
+    subcategories: list[
+        SubcategoryResponse
+    ]

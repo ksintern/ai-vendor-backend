@@ -7,7 +7,21 @@ from sqlalchemy import (
     String
 )
 
+from sqlalchemy.orm import relationship
+
 from sqlalchemy.dialects.postgresql import UUID
+
+from app.models.review import Review
+
+from app.models.search_history import SearchHistory
+
+from app.models.viewed_vendor import ViewedVendor
+
+from app.models.user_preference import UserPreference
+
+from app.models.vendor import Vendor
+
+from app.models.conversation import Conversation
 
 from sqlalchemy.sql import func
 
@@ -15,6 +29,7 @@ from app.db.base import Base
 
 
 class User(Base):
+
     __tablename__ = "users"
 
     user_id = Column(
@@ -74,30 +89,42 @@ class User(Base):
         onupdate=func.now()
     )
 
+
+    # -----------------------------
+    # VENDOR RELATIONSHIP (NEW)
+    # -----------------------------
+
+    vendor = relationship(
+        "Vendor",
+        back_populates="user",
+        uselist=False
+    )
+
+
     # TEMPORARILY COMMENTED FOR AUTH MODULE TESTING
 
-    # reviews = relationship(
-    #     "Review",
-    #     back_populates="user"
-    # )
+    reviews = relationship(
+        "Review",
+        back_populates="user"
+    )
 
-    # viewed_vendors = relationship(
-    #     "ViewedVendor",
-    #     back_populates="user"
-    # )
+    viewed_vendors = relationship(
+        "ViewedVendor",
+        back_populates="user"
+    )
 
-    # preferences = relationship(
-    #     "UserPreference",
-    #     back_populates="user",
-    #     uselist=False
-    # )
+    preferences = relationship(
+        "UserPreference",
+        back_populates="user",
+        uselist=False
+    )
 
-    # conversations = relationship(
-    #     "Conversation",
-    #     back_populates="user"
-    # )
+    conversations = relationship(
+        "Conversation",
+        back_populates="user"
+    )
 
-    # search_history = relationship(
-    #     "SearchHistory",
-    #     back_populates="user"
-    # )
+    search_history = relationship(
+        "SearchHistory",
+        back_populates="user"
+    )
