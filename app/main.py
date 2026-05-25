@@ -1,106 +1,331 @@
-from fastapi import FastAPI
+from fastapi import (
+    FastAPI,
+    HTTPException
+)
 
-from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.cors import (
+    CORSMiddleware
+)
 
-from app.api.routes.auth import router as auth_router
+from fastapi.exceptions import (
+    RequestValidationError
+)
 
-from app.api.routes.vendor import router as vendor_router
-
-from app.api.routes.category import router as category_router
-
-from app.api.routes.subcategory import router as subcategory_router
+from sqlalchemy.exc import (
+    SQLAlchemyError,
+    IntegrityError
+)
 
 from app.db.base import Base
 
 from app.db.session import engine
 
 
-# -----------------------------
-# IMPORT ALL MODELS
-# -----------------------------
+# =====================================
+# ROUTES
+# =====================================
+
+from app.api.routes.auth import (
+    router as auth_router
+)
+
+from app.api.routes.vendor import (
+    router as vendor_router
+)
+
+from app.api.routes.category import (
+    router as category_router
+)
+
+from app.api.routes.ai import (
+    router as ai_router
+)
+
+
+# =====================================
+# EXCEPTION HANDLERS
+# =====================================
+
+from app.core.exceptions import (
+
+    validation_exception_handler,
+
+    http_exception_handler,
+
+    database_exception_handler,
+
+    integrity_exception_handler,
+
+    internal_exception_handler
+
+)
+
+
+# =====================================
+# MIDDLEWARE
+# =====================================
+
+from app.core.request_logger import (
+
+    RequestLoggingMiddleware
+
+)
+
+
+# =====================================
+# IMPORT MODELS
+# =====================================
 
 from app.models.user import User
 
 from app.models.category import Category
 
-from app.models.subcategory import Subcategory
-
 from app.models.vendor import Vendor
 
+from app.models.review import Review
 
-# -----------------------------
-# CREATE DATABASE TABLES
-# -----------------------------
+from app.models.search_history import (
+    SearchHistory
+)
 
-Base.metadata.create_all(bind=engine)
+from app.models.user_preference import (
+    UserPreference
+)
 
+from app.models.viewed_vendor import (
+    ViewedVendor
+)
 
-app = FastAPI(
+from app.models.conversation import (
+    Conversation
+)
 
-    title="AI Vendor Discovery Agent API"
+from app.models.semantic_embedding import (
+    SemanticEmbedding
+)
+
+from app.models.recommendation_metadata import (
+    RecommendationMetadata
+)
+
+from app.models.pricing_model import (
+    PricingModel
+)
+
+from app.models.vendor_media import (
+    VendorMedia
+)
+
+from app.models.vendor_service import (
+    VendorService
 )
 
 
-# -----------------------------
-# CORS CONFIGURATION
-# -----------------------------
+# =====================================
+# CREATE TABLES
+# =====================================
+
+Base.metadata.create_all(
+
+    bind=engine
+
+)
+
+
+# =====================================
+# APP
+# =====================================
+
+app = FastAPI(
+
+    title=
+
+    "AI Vendor Discovery Agent API",
+
+    version=
+
+    "1.0.0"
+
+)
+
+
+# =====================================
+# REQUEST LOGGING
+# =====================================
+
+app.add_middleware(
+
+    RequestLoggingMiddleware
+
+)
+
+
+# =====================================
+# CORS
+# =====================================
 
 origins = [
 
-    "http://localhost:5173",
-]
+    "http://localhost:5173"
 
+]
 
 app.add_middleware(
 
     CORSMiddleware,
 
-    allow_origins=origins,
+    allow_origins=
+
+    origins,
 
     allow_credentials=True,
 
     allow_methods=["*"],
 
-    allow_headers=["*"],
+    allow_headers=["*"]
+
 )
 
 
-# -----------------------------
-# ROOT ROUTE
-# -----------------------------
+# =====================================
+# EXCEPTION HANDLERS
+# =====================================
+
+app.exception_handler(
+
+    RequestValidationError
+
+)(
+
+    validation_exception_handler
+
+)
+
+app.exception_handler(
+
+    HTTPException
+
+)(
+
+    http_exception_handler
+
+)
+
+app.exception_handler(
+
+    SQLAlchemyError
+
+)(
+
+    database_exception_handler
+
+)
+
+app.exception_handler(
+
+    IntegrityError
+
+)(
+
+    integrity_exception_handler
+
+)
+
+app.exception_handler(
+
+    Exception
+
+)(
+
+    internal_exception_handler
+
+)
+
+
+# =====================================
+# ROOT
+# =====================================
 
 @app.get("/")
 def home():
 
     return {
 
-        "message": "AI Vendor Discovery Agent Backend Running"
+        "success": True,
+
+        "message":
+
+        "AI Vendor Discovery Agent Backend Running",
+
+        "data": {
+
+            "service":
+
+            "AI Vendor Discovery Agent API",
+
+            "version":
+
+            "1.0.0"
+
+        },
+
+        "error": None
+
     }
 
 
-# -----------------------------
-# AUTH ROUTES
-# -----------------------------
+# =====================================
+# HEALTH CHECK
+# =====================================
 
-app.include_router(auth_router)
+@app.get("/health")
+def health_check():
+
+    return {
+
+        "success": True,
+
+        "message":
+
+        "Backend healthy",
+
+        "data": {
+
+            "database":
+
+            "connected"
+
+        },
+
+        "error": None
+
+    }
 
 
-# -----------------------------
-# CATEGORY ROUTES
-# -----------------------------
+# =====================================
+# ROUTES
+# =====================================
 
-app.include_router(category_router)
+app.include_router(
 
+    auth_router
 
-# -----------------------------
-# SUBCATEGORY ROUTES
-# -----------------------------
+)
 
-app.include_router(subcategory_router)
+app.include_router(
 
+    category_router
 
-# -----------------------------
-# VENDOR ROUTES
-# -----------------------------
+)
 
-app.include_router(vendor_router)
+app.include_router(
+
+    vendor_router
+
+)
+
+app.include_router(
+
+    ai_router
+
+)

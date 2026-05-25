@@ -7,18 +7,72 @@ from sqlalchemy import (
     func
 )
 
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import (
+    Session,
+    aliased
+)
 
 from app.models.vendor import Vendor
-from app.models.category import Category
-from app.models.subcategory import Subcategory
 from app.models.review import Review
-from app.models.pricing_model import PricingModel
+from app.models.service import Service
 
 
-# =====================================================
-# CREATE VENDOR
-# =====================================================
+# =====================================
+# CREATE ROOT VENDOR
+# =====================================
+
+def create_root_vendor(
+
+    db: Session,
+
+    current_user_id: UUID,
+
+    vendor_data: dict
+
+):
+
+    existing=(
+
+        db.query(Vendor)
+
+        .filter(
+
+            Vendor.user_id
+            ==
+            current_user_id
+
+        )
+
+        .first()
+
+    )
+
+    if existing:
+
+        return existing
+
+    vendor=Vendor(
+
+        user_id=current_user_id,
+
+        parent_vendor_id=None,
+
+        **vendor_data
+
+    )
+
+    db.add(vendor)
+
+    db.commit()
+
+    db.refresh(vendor)
+
+    return vendor
+
+
+# =====================================
+# CREATE CATEGORY VENDOR
+# =====================================
 
 def create_vendor(
 
@@ -28,32 +82,182 @@ def create_vendor(
 
 ):
 
-    new_vendor = Vendor(
+    vendor=Vendor(
 
         **vendor_data
 
     )
 
-    db.add(
-
-        new_vendor
-
-    )
+    db.add(vendor)
 
     db.commit()
 
-    db.refresh(
+    db.refresh(vendor)
 
-        new_vendor
+    return vendor
+
+
+# =====================================
+# CREATE SERVICE
+# =====================================
+
+def create_service(
+
+    db: Session,
+
+    service: Service
+
+):
+
+    db.add(service)
+
+    db.commit()
+
+    db.refresh(service)
+
+    return service
+
+
+# =====================================
+# SERVICE BY ID
+# =====================================
+
+def get_service_by_id(
+
+    db: Session,
+
+    service_id: UUID
+
+):
+
+    return (
+
+        db.query(Service)
+
+        .filter(
+
+            Service.service_id
+            ==
+            service_id
+
+        )
+
+        .first()
 
     )
 
-    return new_vendor
+
+# =====================================
+# CATEGORY SERVICES
+# =====================================
+
+def get_services_by_category(
+
+    db: Session,
+
+    category_vendor_id: UUID
+
+):
+
+    return (
+
+        db.query(Service)
+
+        .filter(
+
+            Service.category_vendor_id
+            ==
+            category_vendor_id
+
+        )
+
+        .all()
+
+    )
 
 
-# =====================================================
-# FETCH SINGLE
-# =====================================================
+# =====================================
+# DUPLICATE SERVICE
+# =====================================
+
+def service_exists(
+
+    db: Session,
+
+    category_vendor_id: UUID,
+
+    service_name: str
+
+):
+
+    return (
+
+        db.query(Service)
+
+        .filter(
+
+            Service.category_vendor_id
+            ==
+            category_vendor_id,
+
+            func.lower(
+                Service.service_name
+            )
+
+            ==
+
+            service_name.strip().lower()
+
+        )
+
+        .first()
+
+    )
+
+
+# =====================================
+# UPDATE SERVICE
+# =====================================
+
+def rename_service(
+
+    db: Session,
+
+    service: Service,
+
+    service_name: str
+
+):
+
+    service.service_name=service_name
+
+    db.commit()
+
+    db.refresh(service)
+
+    return service
+
+
+# =====================================
+# DELETE SERVICE
+# =====================================
+
+def delete_service(
+
+    db: Session,
+
+    service: Service
+
+):
+
+    db.delete(service)
+
+    db.commit()
+
+
+# =====================================
+# VENDOR BY ID
+# =====================================
 
 def get_vendor_by_id(
 
@@ -69,7 +273,9 @@ def get_vendor_by_id(
 
         .filter(
 
-            Vendor.vendor_id == vendor_id,
+            Vendor.vendor_id
+            ==
+            vendor_id,
 
             Vendor.is_active.is_(True)
 
@@ -80,15 +286,15 @@ def get_vendor_by_id(
     )
 
 
-# =====================================================
-# FETCH EMAIL
-# =====================================================
+# =====================================
+# EMAIL
+# =====================================
 
 def get_vendor_by_business_email(
 
     db: Session,
 
-    business_email: str
+    email:str
 
 ):
 
@@ -98,36 +304,13 @@ def get_vendor_by_business_email(
 
         .filter(
 
-            Vendor.business_email
+            func.lower(
+                Vendor.business_email
+            )
 
-            == business_email
+            ==
 
-        )
-
-        .first()
-
-    )
-
-
-# =====================================================
-# FETCH SLUG
-# =====================================================
-
-def get_vendor_by_slug(
-
-    db: Session,
-
-    slug: str
-
-):
-
-    return (
-
-        db.query(Vendor)
-
-        .filter(
-
-            Vendor.slug == slug
+            email.strip().lower()
 
         )
 
@@ -136,9 +319,9 @@ def get_vendor_by_slug(
     )
 
 
-# =====================================================
-# FETCH ACTIVE
-# =====================================================
+# =====================================
+# GET ALL
+# =====================================
 
 def get_all_vendors(
 
@@ -152,7 +335,9 @@ def get_all_vendors(
 
         .filter(
 
-            Vendor.is_active.is_(True)
+            Vendor.is_active.is_(True),
+
+            Vendor.parent_vendor_id.is_(None)
 
         )
 
@@ -161,9 +346,9 @@ def get_all_vendors(
     )
 
 
-# =====================================================
-# SEARCH FILTER SORT
-# =====================================================
+# =====================================
+# SEARCH
+# =====================================
 
 def search_vendors(
 
@@ -175,13 +360,9 @@ def search_vendors(
 
     category=None,
 
-    subcategory=None,
-
     min_price=None,
 
     max_price=None,
-
-    pricing_type=None,
 
     rating=None,
 
@@ -199,35 +380,45 @@ def search_vendors(
 
 ):
 
-    search_query = (
+    CategoryVendor=aliased(Vendor)
+
+    search_query=(
 
         db.query(Vendor)
 
         .outerjoin(
 
-            Review,
+            CategoryVendor,
 
-            Vendor.vendor_id
-
+            CategoryVendor.parent_vendor_id
             ==
-
-            Review.vendor_id
+            Vendor.vendor_id
 
         )
 
         .outerjoin(
 
-            PricingModel,
+            Service,
 
-            Vendor.vendor_id
-
+            Service.category_vendor_id
             ==
+            CategoryVendor.vendor_id
 
-            PricingModel.vendor_id
+        )
+
+        .outerjoin(
+
+            Review,
+
+            Review.vendor_id
+            ==
+            Vendor.vendor_id
 
         )
 
         .filter(
+
+            Vendor.parent_vendor_id.is_(None),
 
             Vendor.is_active.is_(True)
 
@@ -236,65 +427,27 @@ def search_vendors(
     )
 
 
-    # CATEGORY JOIN
-
-    if category:
-
-        search_query = search_query.join(
-
-            Category,
-
-            Vendor.category_id
-
-            ==
-
-            Category.category_id
-
-        )
-
-
-    # SUBCATEGORY JOIN
-
-    if subcategory:
-
-        search_query = search_query.join(
-
-            Subcategory,
-
-            Vendor.subcategory_id
-
-            ==
-
-            Subcategory.subcategory_id
-
-        )
-
-
-    # SEARCH
-
     if query:
 
-        pattern = f"%{query}%"
+        pattern=f"%{query.strip()}%"
 
-        search_query = search_query.filter(
+        search_query=(
 
-            or_(
+            search_query
 
-                Vendor.name.ilike(
+            .filter(
 
-                    pattern
+                or_(
 
-                ),
+                    Vendor.name.ilike(pattern),
 
-                Vendor.description.ilike(
+                    Vendor.description.ilike(pattern),
 
-                    pattern
+                    Vendor.city.ilike(pattern),
 
-                ),
+                    CategoryVendor.name.ilike(pattern),
 
-                Vendor.city.ilike(
-
-                    pattern
+                    Service.service_name.ilike(pattern)
 
                 )
 
@@ -303,160 +456,142 @@ def search_vendors(
         )
 
 
-    # CITY
-
     if city:
 
-        search_query = search_query.filter(
+        search_query=(
 
-            Vendor.city.ilike(
+            search_query
 
-                f"%{city}%"
+            .filter(
+
+                Vendor.city.ilike(
+
+                    f"%{city}%"
+
+                )
 
             )
 
         )
 
-
-    # CATEGORY
 
     if category:
 
-        search_query = search_query.filter(
+        search_query=(
 
-            Category.name.ilike(
+            search_query
 
-                f"%{category}%"
+            .filter(
 
-            )
+                CategoryVendor.name.ilike(
 
-        )
+                    f"%{category}%"
 
-
-    # SUBCATEGORY
-
-    if subcategory:
-
-        search_query = search_query.filter(
-
-            Subcategory.name.ilike(
-
-                f"%{subcategory}%"
+                )
 
             )
 
         )
 
-
-    # PRICE
-
-    if min_price is not None:
-
-        search_query = search_query.filter(
-
-            Vendor.price_max >= min_price
-
-        )
-
-
-    if max_price is not None:
-
-        search_query = search_query.filter(
-
-            Vendor.price_min <= max_price
-
-        )
-
-
-    # PRICING TYPE
-
-    if pricing_type:
-
-        search_query = search_query.filter(
-
-            PricingModel.pricing_type
-
-            ==
-
-            pricing_type
-
-        )
-
-
-    # VERIFIED
-
-    if verified is not None:
-
-        search_query = search_query.filter(
-
-            Vendor.is_verified
-
-            ==
-
-            verified
-
-        )
-
-
-    # AVAILABLE
 
     if available is not None:
 
-        search_query = search_query.filter(
+        search_query=(
 
-            Vendor.is_available
+            search_query
 
-            ==
+            .filter(
 
-            available
+                Vendor.is_available
+                ==
+                available
+
+            )
 
         )
 
 
-    search_query = search_query.group_by(
+    if verified is not None:
 
-        Vendor.vendor_id
+        search_query=(
+
+            search_query
+
+            .filter(
+
+                Vendor.is_verified
+                ==
+                verified
+
+            )
+
+        )
+
+
+    search_query=(
+
+        search_query
+
+        .group_by(
+
+            Vendor.vendor_id
+
+        )
 
     )
 
 
-    # REAL REVIEW FILTER
-
     if rating:
 
-        search_query = search_query.having(
+        search_query=(
 
-            func.avg(
+            search_query
 
-                Review.rating
+            .having(
 
-            ) >= rating
+                func.avg(
+
+                    Review.rating
+
+                )
+
+                >=
+                rating
+
+            )
 
         )
 
-
-    # REVIEW COUNT
 
     if min_reviews:
 
-        search_query = search_query.having(
+        search_query=(
 
-            func.count(
+            search_query
 
-                Review.review_id
+            .having(
 
-            ) >= min_reviews
+                func.count(
+
+                    Review.review_id
+
+                )
+
+                >=
+                min_reviews
+
+            )
 
         )
 
 
-    # SORT
+    if sort_by=="rating":
 
-    if sort_by:
+        search_query=(
 
-        if sort_by == "rating":
+            search_query
 
-            search_query = search_query.order_by(
+            .order_by(
 
                 desc(
 
@@ -470,10 +605,16 @@ def search_vendors(
 
             )
 
+        )
 
-        elif sort_by == "price_low":
 
-            search_query = search_query.order_by(
+    elif sort_by=="price_low":
+
+        search_query=(
+
+            search_query
+
+            .order_by(
 
                 asc(
 
@@ -483,10 +624,16 @@ def search_vendors(
 
             )
 
+        )
 
-        elif sort_by == "price_high":
 
-            search_query = search_query.order_by(
+    elif sort_by=="price_high":
+
+        search_query=(
+
+            search_query
+
+            .order_by(
 
                 desc(
 
@@ -496,68 +643,61 @@ def search_vendors(
 
             )
 
-
-        elif sort_by == "latest":
-
-            search_query = search_query.order_by(
-
-                desc(
-
-                    Vendor.created_at
-
-                )
-
-            )
+        )
 
 
-    total = search_query.count()
+    total=search_query.count()
 
-    offset = (
-
-        page - 1
-
-    ) * limit
-
-
-    vendors = (
+    vendors=(
 
         search_query
 
         .offset(
 
-            offset
+            (page-1)*limit
 
         )
 
-        .limit(
-
-            limit
-
-        )
+        .limit(limit)
 
         .all()
 
     )
 
-
     return vendors,total
 
 
-# =====================================================
+# =====================================
 # UPDATE
-# =====================================================
+# =====================================
 
 def update_vendor(
 
-    db: Session,
+    db:Session,
 
-    vendor: Vendor,
+    vendor:Vendor,
 
-    update_data: dict
+    update_data:dict
 
 ):
 
+    blocked={
+
+        "vendor_id",
+
+        "user_id",
+
+        "avg_rating",
+
+        "review_count"
+
+    }
+
     for key,value in update_data.items():
+
+        if key in blocked:
+
+            continue
 
         setattr(
 
@@ -571,39 +711,27 @@ def update_vendor(
 
     db.commit()
 
-    db.refresh(
-
-        vendor
-
-    )
+    db.refresh(vendor)
 
     return vendor
 
 
-# =====================================================
-# SOFT DELETE
-# =====================================================
+# =====================================
+# DELETE
+# =====================================
 
 def deactivate_vendor(
 
-    db: Session,
+    db:Session,
 
-    vendor: Vendor
+    vendor:Vendor
 
 ):
 
-    setattr(
-        vendor,
-        "is_active",
-        False
-    )
+    vendor.is_active=False
 
     db.commit()
 
-    db.refresh(
-
-        vendor
-
-    )
+    db.refresh(vendor)
 
     return vendor

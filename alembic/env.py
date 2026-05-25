@@ -21,7 +21,6 @@ if config.config_file_name is not None:
 
 from app.db.base import Base
 from app.models.category import Category
-from app.models.subcategory import Subcategory
 from app.models.vendor import Vendor
 from app.models.review import Review
 from app.models.user import User

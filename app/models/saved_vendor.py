@@ -3,42 +3,41 @@ import uuid
 from sqlalchemy import (
 
     Column,
-    DateTime,
     ForeignKey,
-    UniqueConstraint
+    UniqueConstraint,
+    DateTime
 
 )
 
-from sqlalchemy.dialects.postgresql import UUID
-
 from sqlalchemy.orm import relationship
+
+from sqlalchemy.dialects.postgresql import UUID
 
 from sqlalchemy.sql import func
 
 from app.db.base import Base
 
 
-class ViewedVendor(Base):
+class SavedVendor(Base):
 
-    __tablename__ = "viewed_vendors"
+    __tablename__="saved_vendors"
 
     __table_args__=(
 
         UniqueConstraint(
 
             "user_id",
-
             "vendor_id",
 
             name=
 
-            "unique_user_vendor_view"
+            "unique_saved_vendor"
 
         ),
 
     )
 
-    view_id=Column(
+    saved_id=Column(
 
         UUID(as_uuid=True),
 
@@ -80,7 +79,7 @@ class ViewedVendor(Base):
 
     )
 
-    viewed_at=Column(
+    created_at=Column(
 
         DateTime(
 
@@ -88,28 +87,18 @@ class ViewedVendor(Base):
 
         ),
 
-        nullable=False,
-
         server_default=func.now()
 
     )
 
     user=relationship(
 
-        "User",
-
-        back_populates=
-
-        "viewed_vendors"
+        "User"
 
     )
 
     vendor=relationship(
 
-        "Vendor",
-
-        back_populates=
-
-        "viewed_by"
+        "Vendor"
 
     )

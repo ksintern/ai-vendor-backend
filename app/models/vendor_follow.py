@@ -18,9 +18,9 @@ from sqlalchemy.sql import func
 from app.db.base import Base
 
 
-class ViewedVendor(Base):
+class VendorFollow(Base):
 
-    __tablename__ = "viewed_vendors"
+    __tablename__="vendor_follows"
 
     __table_args__=(
 
@@ -32,13 +32,13 @@ class ViewedVendor(Base):
 
             name=
 
-            "unique_user_vendor_view"
+            "unique_user_vendor_follow"
 
         ),
 
     )
 
-    view_id=Column(
+    follower_id=Column(
 
         UUID(as_uuid=True),
 
@@ -80,15 +80,13 @@ class ViewedVendor(Base):
 
     )
 
-    viewed_at=Column(
+    created_at=Column(
 
         DateTime(
 
             timezone=True
 
         ),
-
-        nullable=False,
 
         server_default=func.now()
 
@@ -100,7 +98,7 @@ class ViewedVendor(Base):
 
         back_populates=
 
-        "viewed_vendors"
+        "followed_vendors"
 
     )
 
@@ -110,6 +108,6 @@ class ViewedVendor(Base):
 
         back_populates=
 
-        "viewed_by"
+        "followers"
 
     )

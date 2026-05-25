@@ -94,13 +94,6 @@ class Category(Base):
     # RELATIONSHIPS
     # -----------------------------
 
-    subcategories = relationship(
-
-        "Subcategory",
-
-        back_populates="category"
-    )
-
     vendors = relationship(
 
         "Vendor",

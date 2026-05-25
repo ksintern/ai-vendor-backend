@@ -1,4 +1,7 @@
-from jose import JWTError, jwt
+from jose import (
+    JWTError,
+    jwt
+)
 
 from fastapi import (
     Depends,
@@ -6,102 +9,246 @@ from fastapi import (
     status
 )
 
-from fastapi.security import OAuth2PasswordBearer
+from fastapi.security import (
+    OAuth2PasswordBearer
+)
 
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import (
+    Session
+)
 
-from app.core.config import settings
+from app.core.config import (
+    settings
+)
 
-from app.db.session import get_db
+from app.db.session import (
+    get_db
+)
 
-from app.models.user import User
-
-
-oauth2_scheme = OAuth2PasswordBearer(
-    tokenUrl="/auth/token"
+from app.models.user import (
+    User
 )
 
 
-# -----------------------------
-# GET CURRENT AUTHENTICATED USER
-# -----------------------------
+oauth2_scheme = OAuth2PasswordBearer(
+
+    tokenUrl="/auth/token"
+
+)
+
+
+# =====================================
+# CURRENT USER
+# =====================================
 
 def get_current_user(
-    token: str = Depends(oauth2_scheme),
-    db: Session = Depends(get_db)
+
+    token: str = Depends(
+
+        oauth2_scheme
+
+    ),
+
+    db: Session = Depends(
+
+        get_db
+
+    )
+
 ):
 
     credentials_exception = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Invalid or expired token",
+
+        status_code=
+
+        status.HTTP_401_UNAUTHORIZED,
+
+        detail=
+
+        "Invalid or expired token",
+
         headers={
-            "WWW-Authenticate": "Bearer"
+
+            "WWW-Authenticate":
+
+            "Bearer"
+
         }
+
     )
 
     try:
 
         payload = jwt.decode(
+
             token,
+
             settings.SECRET_KEY,
-            algorithms=[settings.ALGORITHM]
+
+            algorithms=[
+
+                settings.ALGORITHM
+
+            ]
+
         )
 
-        email = payload.get("sub")
+        email = payload.get(
 
-        token_type = payload.get("type")
+            "sub"
 
-        if email is None or token_type != "access":
+        )
 
-            raise credentials_exception
+        token_type = payload.get(
+
+            "type"
+
+        )
+
+        if (
+
+            email is None
+
+            or
+
+            token_type != "access"
+
+        ):
+
+            raise (
+
+                credentials_exception
+
+            )
 
     except JWTError:
 
-        raise credentials_exception
+        raise (
 
-    user = db.query(User).filter(
-        User.email == email
-    ).first()
+            credentials_exception
+
+        )
+
+    user = (
+
+        db.query(User)
+
+        .filter(
+
+            User.email
+
+            ==
+
+            email
+
+        )
+
+        .first()
+
+    )
 
     if user is None:
 
-        raise credentials_exception
+        raise (
+
+            credentials_exception
+
+        )
+
+    if user.is_active is False:
+
+        raise HTTPException(
+
+            status_code=
+
+            status.HTTP_403_FORBIDDEN,
+
+            detail=
+
+            "User account is inactive"
+
+    )
 
     return user
 
 
-# -----------------------------
-# ROLE-BASED ACCESS CONTROL
-# -----------------------------
+# =====================================
+# ROLE ACCESS
+# =====================================
 
 def require_role(
+
     allowed_roles: list[str]
+
 ):
 
     def role_checker(
 
         current_user: User = Depends(
+
             get_current_user
+
         )
+
     ):
 
-        if current_user.role not in allowed_roles:
+        if (
+
+            current_user.role
+
+            not in
+
+            allowed_roles
+
+        ):
 
             raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Access denied"
+
+                status_code=
+
+                status.HTTP_403_FORBIDDEN,
+
+                detail=(
+
+                    "You do not have permission "
+
+                    "to perform this action"
+
+                )
+
             )
 
         return current_user
 
     return role_checker
 
-admin_required = require_role(["admin"])
 
-vendor_required = require_role(["vendor"])
+# =====================================
+# ROLE SHORTCUTS
+# =====================================
 
-user_required = require_role([
-    "admin",
-    "vendor",
-    "user"
-])
+admin_required = require_role(
+
+    ["admin"]
+
+)
+
+vendor_required = require_role(
+
+    ["vendor"]
+
+)
+
+user_required = require_role(
+
+    [
+
+        "admin",
+
+        "vendor",
+
+        "user"
+
+    ]
+
+)

@@ -1,4 +1,7 @@
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import (
+    BaseSettings,
+    SettingsConfigDict
+)
 
 
 class Settings(BaseSettings):
@@ -22,10 +25,32 @@ class Settings(BaseSettings):
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
 
     # -----------------------------
+    # GEMINI CONFIGURATION
+    # -----------------------------
+
+    GEMINI_API_KEY: str | None = None
+
+    # -----------------------------
+    # AI CONFIGURATION
+    # -----------------------------
+
+    AI_PROVIDER: str = "gemini"
+
+    AI_MODEL: str = "gemini-2.5-flash"
+
+    AI_TIMEOUT: int = 30
+
+    # -----------------------------
     # ENV CONFIGURATION
     # -----------------------------
 
-    model_config = SettingsConfigDict(env_file=".env")
+    model_config = SettingsConfigDict(
+
+        env_file=".env",
+
+        extra="ignore"
+
+    )
 
 
 settings = Settings()  # type: ignore

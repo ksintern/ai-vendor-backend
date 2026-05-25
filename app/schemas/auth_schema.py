@@ -11,13 +11,11 @@ from pydantic import (
 import re
 
 
-# -----------------------------
+# =============================
 # LOGIN REQUEST
-# -----------------------------
+# =============================
 
 class LoginRequest(BaseModel):
-
-    # Email OR Username
 
     identifier: str = Field(
         min_length=3,
@@ -29,10 +27,27 @@ class LoginRequest(BaseModel):
         max_length=100
     )
 
+    @field_validator("identifier")
+    @classmethod
+    def validate_identifier(
+        cls,
+        value: str
+    ):
 
-# -----------------------------
+        value = value.strip()
+
+        if not value:
+
+            raise ValueError(
+                "Email or username is required"
+            )
+
+        return value
+
+
+# =============================
 # REGISTER REQUEST
-# -----------------------------
+# =============================
 
 class RegisterRequest(BaseModel):
 
@@ -62,138 +77,296 @@ class RegisterRequest(BaseModel):
     confirm_password: str
 
 
-    # -----------------------------
-    # USERNAME VALIDATION
-    # -----------------------------
+    # =============================
+    # USERNAME
+    # =============================
 
     @field_validator("username")
     @classmethod
-    def validate_username(cls, value: str):
+    def validate_username(
+
+        cls,
+
+        value: str
+
+    ):
+
+        value = value.strip()
 
         if not re.match(
+
             r"^[a-zA-Z0-9._-]+$",
+
             value
+
         ):
 
             raise ValueError(
-                "Username can only contain letters, numbers, dots, hyphens, and underscores"
+
+                "Username can only contain letters, numbers, dots, hyphens and underscores"
+
+            )
+
+        if not re.search(
+
+            r"[a-zA-Z0-9]",
+
+            value
+
+        ):
+
+            raise ValueError(
+
+                "Username must contain letters or numbers"
+
             )
 
         return value
 
 
-    # -----------------------------
-    # PHONE NUMBER VALIDATION
-    # -----------------------------
+    # =============================
+    # FULL NAME
+    # =============================
+
+    @field_validator("full_name")
+    @classmethod
+    def validate_name(
+
+        cls,
+
+        value: str
+
+    ):
+
+        value = value.strip()
+
+        if not re.match(
+
+            r"^[A-Za-z ]+$",
+
+            value
+
+        ):
+
+            raise ValueError(
+
+                "Full name can contain only letters"
+
+            )
+
+        return value
+
+
+    # =============================
+    # PHONE
+    # =============================
 
     @field_validator("phone_number")
     @classmethod
-    def validate_phone_number(
+    def validate_phone(
+
         cls,
+
         value: str | None
+
     ):
 
         if value:
 
+            value = value.strip()
+
             if not re.match(
+
                 r"^[0-9]{10}$",
+
                 value
+
             ):
 
                 raise ValueError(
+
                     "Phone number must contain exactly 10 digits"
+
                 )
 
         return value
 
 
-    # -----------------------------
-    # ROLE VALIDATION
-    # -----------------------------
+    # =============================
+    # ROLE
+    # =============================
 
     @field_validator("role")
     @classmethod
     def validate_role(
+
         cls,
+
         value: str
+
     ):
 
         allowed_roles = [
+
             "user",
+
             "vendor"
+
         ]
+
+        value = value.lower()
 
         if value not in allowed_roles:
 
             raise ValueError(
+
                 "Invalid role selected"
+
             )
 
         return value
 
 
-    # -----------------------------
-    # PASSWORD VALIDATION
-    # -----------------------------
+    # =============================
+    # PASSWORD
+    # =============================
 
     @field_validator("password")
     @classmethod
     def validate_password(
+
         cls,
+
         value: str
+
     ):
 
-        if not re.search(r"[A-Z]", value):
-
-            raise ValueError(
-                "Password must contain at least one uppercase letter"
-            )
-
-        if not re.search(r"[a-z]", value):
-
-            raise ValueError(
-                "Password must contain at least one lowercase letter"
-            )
-
-        if not re.search(r"[0-9]", value):
-
-            raise ValueError(
-                "Password must contain at least one number"
-            )
-
         if not re.search(
-            r"[!@#$%^&*(),.?\":{}|<>]",
+
+            r"[A-Z]",
+
             value
+
         ):
 
             raise ValueError(
-                "Password must contain at least one special character"
+
+                "Password must contain one uppercase letter"
+
+            )
+
+        if not re.search(
+
+            r"[a-z]",
+
+            value
+
+        ):
+
+            raise ValueError(
+
+                "Password must contain one lowercase letter"
+
+            )
+
+        if not re.search(
+
+            r"[0-9]",
+
+            value
+
+        ):
+
+            raise ValueError(
+
+                "Password must contain one number"
+
+            )
+
+        if not re.search(
+
+            r"[!@#$%^&*(),.?\":{}|<>]",
+
+            value
+
+        ):
+
+            raise ValueError(
+
+                "Password must contain one special character"
+
             )
 
         return value
 
 
-    # -----------------------------
-    # CONFIRM PASSWORD VALIDATION
-    # -----------------------------
+    # =============================
+    # REGISTER CHECK
+    # =============================
 
-    @model_validator(mode="after")
-    def validate_confirm_password(self):
+    @model_validator(
+        mode="after"
+    )
+    def validate_register(
 
-        if self.password != self.confirm_password:
+        self
+
+    ):
+
+        if (
+
+            self.password
+
+            !=
+
+            self.confirm_password
+
+        ):
 
             raise ValueError(
+
                 "Passwords do not match"
+
             )
+
+        if (
+
+            self.role
+
+            ==
+
+            "vendor"
+
+        ):
+
+            if not self.business_email:
+
+                raise ValueError(
+
+                    "Business email is required for vendors"
+
+                )
+
+            if not self.phone_number:
+
+                raise ValueError(
+
+                    "Phone number is required for vendors"
+
+                )
 
         return self
 
 
-# -----------------------------
+# =============================
 # USER RESPONSE
-# -----------------------------
+# =============================
 
-class UserResponse(BaseModel):
+class UserResponse(
+
+    BaseModel
+
+):
 
     user_id: UUID
 
@@ -208,11 +381,15 @@ class UserResponse(BaseModel):
     phone_number: str | None = None
 
 
-# -----------------------------
+# =============================
 # LOGIN RESPONSE
-# -----------------------------
+# =============================
 
-class LoginResponse(BaseModel):
+class LoginResponse(
+
+    BaseModel
+
+):
 
     success: bool
 
@@ -225,11 +402,15 @@ class LoginResponse(BaseModel):
     user: UserResponse
 
 
-# -----------------------------
+# =============================
 # REGISTER RESPONSE
-# -----------------------------
+# =============================
 
-class RegisterResponse(BaseModel):
+class RegisterResponse(
+
+    BaseModel
+
+):
 
     success: bool
 
