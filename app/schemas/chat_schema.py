@@ -1,13 +1,17 @@
 from typing import (
+
     List,
     Optional
+
 )
 
 from pydantic import (
+
     BaseModel,
     ConfigDict,
     Field,
     field_validator
+
 )
 
 
@@ -28,6 +32,8 @@ class RecommendationCard(
     price_min: Optional[int] = None
 
     price_max: Optional[int] = None
+
+    description: Optional[str] = None
 
 
 class ChatRequest(
@@ -96,7 +102,11 @@ class ChatResponse(
 
     recommendations: List[
         RecommendationCard
-    ] = []
+    ] = Field(
+
+        default_factory=list
+
+    )
 
     error: Optional[
         str

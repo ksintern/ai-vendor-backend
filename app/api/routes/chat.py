@@ -99,9 +99,75 @@ async def chat(
 
         )
 
+        if (
+
+            not result
+
+        ):
+
+            raise HTTPException(
+
+                status_code=
+
+                status.HTTP_500_INTERNAL_SERVER_ERROR,
+
+                detail=
+
+                "Empty response from chat service"
+
+            )
+
+        if (
+
+            result.get(
+
+                "success"
+
+            )
+
+            is False
+
+        ):
+
+            raise HTTPException(
+
+                status_code=
+
+                status.HTTP_500_INTERNAL_SERVER_ERROR,
+
+                detail=
+
+                result.get(
+
+                    "error"
+
+                )
+
+                or
+
+                "Chat processing failed"
+
+            )
+
         return result
 
-    except Exception:
+    except HTTPException:
+
+        raise
+
+    except Exception as e:
+
+        print(
+
+            "CHAT API ERROR:",
+
+            str(
+
+                e
+
+            )
+
+        )
 
         raise HTTPException(
 

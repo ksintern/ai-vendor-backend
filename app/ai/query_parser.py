@@ -41,6 +41,8 @@ class QueryFilters(
 
     pricing_preference: Optional[str]
 
+    service_request: bool
+
 
 class QueryParser:
 
@@ -158,6 +160,36 @@ class QueryParser:
 
     }
 
+    SERVICE_TERMS={
+
+        "service",
+
+        "services",
+
+        "provide",
+
+        "provides",
+
+        "offering",
+
+        "offer"
+
+    }
+
+    COMPARISON_TERMS={
+
+        "compare",
+
+        "comparison",
+
+        "versus",
+
+        "vs",
+
+        "better"
+
+    }
+
     @staticmethod
     def extract_filters(
 
@@ -178,6 +210,18 @@ class QueryParser:
             query
             .lower()
             .strip()
+
+        )
+
+        tokens=set(
+
+            re.findall(
+
+                r"\w+",
+
+                query_lower
+
+            )
 
         )
 
@@ -286,6 +330,30 @@ class QueryParser:
         if event:
 
             filters["event_type"]=event
+
+        if any(
+
+            term in query_lower
+
+            for term
+
+            in QueryParser.SERVICE_TERMS
+
+        ):
+
+            filters["service_request"]=True
+
+        if any(
+
+            term in tokens
+
+            for term
+
+            in QueryParser.COMPARISON_TERMS
+
+        ):
+
+            filters["comparison_request"]=True
 
         if any(
 
@@ -408,41 +476,33 @@ class QueryParser:
 
         if k_format:
 
-            return int(
+            return (
 
-                k_format.group(1)
+                int(
 
-            )*1000
-
-        budget_patterns=[
-
-            r"(?:under|below|within|max|budget)\s*(\d+)",
-
-            r"\b(\d{4,7})\b"
-
-        ]
-
-        for pattern in budget_patterns:
-
-            match=re.search(
-
-                pattern,
-
-                query
-
-            )
-
-            if match:
-
-                value=int(
-
-                    match.group(1)
+                    k_format.group(1)
 
                 )
 
-                if value>1000:
+                *1000
 
-                    return value
+            )
+
+        numbers=re.findall(
+
+            r"\d{4,7}",
+
+            query
+
+        )
+
+        for number in numbers:
+
+            value=int(number)
+
+            if value>1000:
+
+                return value
 
         return None
 
@@ -479,7 +539,7 @@ class QueryParser:
 
         )
 
-        if (
+        budget=(
 
             filters.get(
 
@@ -487,32 +547,38 @@ class QueryParser:
 
             )
 
-            and
+        )
 
-            numbers
+        for number in numbers:
 
-        ):
+            value=int(number)
 
-            for number in numbers:
+            if (
 
-                value=int(
+                1
 
-                    number
+                <=
 
-                )
+                value
 
-                if 1<=value<=1000:
+                <=
 
-                    if value!=(
+                1000
 
-                        filters.get(
+            ):
 
-                            "budget"
+                if (
 
-                        )
+                    budget
 
-                    ):
+                    and
 
-                        return value
+                    value==budget
+
+                ):
+
+                    continue
+
+                return value
 
         return None

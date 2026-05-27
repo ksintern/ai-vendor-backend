@@ -9,7 +9,8 @@ from sqlalchemy import (
 
 from sqlalchemy.orm import (
     Session,
-    aliased
+    aliased,
+    joinedload
 )
 
 from app.models.vendor import Vendor
@@ -18,7 +19,7 @@ from app.models.service import Service
 
 
 # =====================================
-# CREATE ROOT VENDOR
+# ROOT VENDOR
 # =====================================
 
 def create_root_vendor(
@@ -71,7 +72,7 @@ def create_root_vendor(
 
 
 # =====================================
-# CREATE CATEGORY VENDOR
+# CATEGORY VENDOR
 # =====================================
 
 def create_vendor(
@@ -98,7 +99,7 @@ def create_vendor(
 
 
 # =====================================
-# SERVICE
+# SERVICES
 # =====================================
 
 def create_service(
@@ -253,17 +254,35 @@ def get_vendor_by_id(
 
         db.query(Vendor)
 
+        .options(
+
+            joinedload(
+
+                Vendor.managed_teams
+
+            )
+
+            .joinedload(
+
+                Vendor.service_records
+
+            ),
+
+            joinedload(
+
+                Vendor.managed_teams
+
+            )
+
+        )
+
         .filter(
 
             Vendor.vendor_id
             ==
             vendor_id,
 
-            Vendor.is_active.is_(
-
-                True
-
-            )
+            Vendor.is_active.is_(True)
 
         )
 
@@ -313,19 +332,33 @@ def get_all_vendors(
 
         db.query(Vendor)
 
-        .filter(
+        .options(
 
-            Vendor.parent_vendor_id.is_(
+            joinedload(
 
-                None
+                Vendor.managed_teams
+
+            )
+
+            .joinedload(
+
+                Vendor.service_records
 
             ),
 
-            Vendor.is_active.is_(
+            joinedload(
 
-                True
+                Vendor.managed_teams
 
             )
+
+        )
+
+        .filter(
+
+            Vendor.parent_vendor_id.is_(None),
+
+            Vendor.is_active.is_(True)
 
         )
 
@@ -348,6 +381,8 @@ def search_vendors(
 
     category=None,
 
+    cuisine=None,
+
     min_price=None,
 
     max_price=None,
@@ -368,13 +403,11 @@ def search_vendors(
 
 ):
 
-    CategoryVendor=aliased(
+    CategoryVendor=aliased(Vendor)
 
-        Vendor
+    ServiceAlias=aliased(Service)
 
-    )
-
-    search_query=(
+    search=(
 
         db.query(Vendor)
 
@@ -390,9 +423,9 @@ def search_vendors(
 
         .outerjoin(
 
-            Service,
+            ServiceAlias,
 
-            Service.category_vendor_id
+            ServiceAlias.category_vendor_id
             ==
             CategoryVendor.vendor_id
 
@@ -408,19 +441,33 @@ def search_vendors(
 
         )
 
-        .filter(
+        .options(
 
-            Vendor.parent_vendor_id.is_(
+            joinedload(
 
-                None
+                Vendor.managed_teams
+
+            )
+
+            .joinedload(
+
+                Vendor.service_records
 
             ),
 
-            Vendor.is_active.is_(
+            joinedload(
 
-                True
+                Vendor.managed_teams
 
             )
+
+        )
+
+        .filter(
+
+            Vendor.parent_vendor_id.is_(None),
+
+            Vendor.is_active.is_(True)
 
         )
 
@@ -428,47 +475,21 @@ def search_vendors(
 
     if query:
 
-        pattern=f"%{query.strip()}%"
+        pattern=f"%{query}%"
 
-        search_query=(
+        search=search.filter(
 
-            search_query
+            or_(
 
-            .filter(
+                Vendor.name.ilike(pattern),
 
-                or_(
+                Vendor.city.ilike(pattern),
 
-                    Vendor.name.ilike(
+                Vendor.description.ilike(pattern),
 
-                        pattern
+                CategoryVendor.name.ilike(pattern),
 
-                    ),
-
-                    Vendor.description.ilike(
-
-                        pattern
-
-                    ),
-
-                    Vendor.city.ilike(
-
-                        pattern
-
-                    ),
-
-                    CategoryVendor.name.ilike(
-
-                        pattern
-
-                    ),
-
-                    Service.service_name.ilike(
-
-                        pattern
-
-                    )
-
-                )
+                ServiceAlias.service_name.ilike(pattern)
 
             )
 
@@ -476,17 +497,11 @@ def search_vendors(
 
     if city:
 
-        search_query=(
+        search=search.filter(
 
-            search_query
+            Vendor.city.ilike(
 
-            .filter(
-
-                Vendor.city.ilike(
-
-                    f"%{city}%"
-
-                )
+                f"%{city}%"
 
             )
 
@@ -494,167 +509,63 @@ def search_vendors(
 
     if category:
 
-        search_query=(
+        search=search.filter(
 
-            search_query
+            CategoryVendor.name.ilike(
 
-            .filter(
-
-                CategoryVendor.name.ilike(
-
-                    f"%{category}%"
-
-                )
+                f"%{category}%"
 
             )
 
         )
 
-    # FIXED PRICE FILTERING
+    if cuisine:
 
-    if min_price is not None:
+        search=search.filter(
 
-        search_query=(
+            ServiceAlias.service_name.ilike(
 
-            search_query
-
-            .filter(
-
-                Vendor.price_max
-
-                >=
-
-                min_price
+                f"%{cuisine}%"
 
             )
 
         )
 
-    if max_price is not None:
+    if min_price:
 
-        search_query=(
+        search=search.filter(
 
-            search_query
-
-            .filter(
-
-                Vendor.price_min
-
-                <=
-
-                max_price
-
-            )
+            Vendor.price_max
+            >=
+            min_price
 
         )
 
-    if available is not None:
+    if max_price:
 
-        search_query=(
+        search=search.filter(
 
-            search_query
-
-            .filter(
-
-                Vendor.is_available
-
-                ==
-
-                available
-
-            )
+            Vendor.price_min
+            <=
+            max_price
 
         )
 
-    if verified is not None:
+    search=search.group_by(
 
-        search_query=(
-
-            search_query
-
-            .filter(
-
-                Vendor.is_verified
-
-                ==
-
-                verified
-
-            )
-
-        )
-
-    search_query=(
-
-        search_query
-
-        .group_by(
-
-            Vendor.vendor_id
-
-        )
+        Vendor.vendor_id
 
     )
 
-    if rating:
+    if sort_by=="rating":
 
-        search_query=(
+        search=search.order_by(
 
-            search_query
-
-            .having(
+            desc(
 
                 func.avg(
 
                     Review.rating
-
-                )
-
-                >=
-
-                rating
-
-            )
-
-        )
-
-    if min_reviews:
-
-        search_query=(
-
-            search_query
-
-            .having(
-
-                func.count(
-
-                    Review.review_id
-
-                )
-
-                >=
-
-                min_reviews
-
-            )
-
-        )
-
-    if sort_by=="rating":
-
-        search_query=(
-
-            search_query
-
-            .order_by(
-
-                desc(
-
-                    func.avg(
-
-                        Review.rating
-
-                    )
 
                 )
 
@@ -664,45 +575,21 @@ def search_vendors(
 
     elif sort_by=="price_low":
 
-        search_query=(
+        search=search.order_by(
 
-            search_query
+            asc(
 
-            .order_by(
-
-                asc(
-
-                    Vendor.price_min
-
-                )
+                Vendor.price_min
 
             )
 
         )
 
-    elif sort_by=="price_high":
-
-        search_query=(
-
-            search_query
-
-            .order_by(
-
-                desc(
-
-                    Vendor.price_max
-
-                )
-
-            )
-
-        )
-
-    total=search_query.count()
+    total=search.count()
 
     vendors=(
 
-        search_query
+        search
 
         .offset(
 
@@ -710,11 +597,7 @@ def search_vendors(
 
         )
 
-        .limit(
-
-            limit
-
-        )
+        .limit(limit)
 
         .all()
 
@@ -735,69 +618,119 @@ def search_vendors_ai(
 
 ):
 
-    payload={
-
-        "db":db,
-
-        "page":1,
-
-        "limit":10,
-
-        "sort_by":"rating"
-
-    }
-
-    if filters.get(
-
-        "city"
-
-    ):
-
-        payload["city"]=filters["city"]
-
-    if filters.get(
-
-        "category"
-
-    ):
-
-        payload["category"]=filters["category"]
-
-    if filters.get(
-
-        "budget"
-
-    ):
-
-        payload["max_price"]=filters["budget"]
-
     vendors,total=(
 
         search_vendors(
 
-            **payload
+            db=db,
+
+            city=filters.get(
+
+                "city"
+
+            ),
+
+            category=filters.get(
+
+                "category"
+
+            ),
+
+            cuisine=filters.get(
+
+                "cuisine"
+
+            ),
+
+            max_price=filters.get(
+
+                "budget"
+
+            ),
+
+            sort_by="rating",
+
+            page=1,
+
+            limit=10
 
         )
 
     )
 
-    if not vendors:
+    pricing=filters.get(
 
-        payload.pop(
+        "pricing_preference"
 
-            "category",
+    )
 
-            None
+    if pricing:
+
+        filtered=[]
+
+        keywords={
+
+            "premium":[
+
+                "premium",
+
+                "luxury"
+
+            ],
+
+            "budget":[
+
+                "budget",
+
+                "cheap",
+
+                "affordable"
+
+            ]
+
+        }
+
+        allowed=keywords.get(
+
+            pricing,
+
+            []
 
         )
 
-        vendors,total=(
+        for vendor in vendors:
 
-            search_vendors(
+            text=(
 
-                **payload
+                f"{vendor.name or ''} "
+
+                f"{vendor.description or ''}"
+
+            ).lower()
+
+            matched=any(
+
+                word in text
+
+                for word
+
+                in allowed
 
             )
+
+            if matched:
+
+                filtered.append(
+
+                    vendor
+
+                )
+
+        vendors=filtered
+
+        total=len(
+
+            vendors
 
         )
 
@@ -808,6 +741,133 @@ def search_vendors_ai(
         "total":total
 
     }
+    
+# =====================================
+# AI HELPERS
+# =====================================
+
+def budget_vendors_ai(
+
+    db: Session,
+
+    budget:int
+
+):
+
+    vendors,_=(
+
+        search_vendors(
+
+            db=db,
+
+            max_price=budget,
+
+            sort_by="price_low"
+
+        )
+
+    )
+
+    return vendors
+
+
+def top_rated_vendors_ai(
+
+    db: Session,
+
+    limit=5
+
+):
+
+    vendors,_=(
+
+        search_vendors(
+
+            db=db,
+
+            sort_by="rating",
+
+            limit=limit
+
+        )
+
+    )
+
+    return vendors
+
+
+def vendor_by_name_ai(
+
+    db: Session,
+
+    name:str
+
+):
+
+    return (
+
+        db.query(Vendor)
+
+        .filter(
+
+            Vendor.name.ilike(
+
+                f"%{name}%"
+
+            )
+
+        )
+
+        .first()
+
+    )
+
+
+def compare_vendors_ai(
+
+    db: Session,
+
+    names:list
+
+):
+
+    return [
+
+        vendor_by_name_ai(
+
+            db,
+
+            name
+
+        )
+
+        for name in names
+
+        if vendor_by_name_ai(
+
+            db,
+
+            name
+
+        )
+
+    ]
+
+
+def vendor_analytics_ai(
+
+    db: Session
+
+):
+
+    return {
+
+        "total_vendors":
+
+        db.query(Vendor).count()
+
+    }
+
 
 # =====================================
 # UPDATE
@@ -823,41 +883,21 @@ def update_vendor(
 
 ):
 
-    blocked = {
-
-        "vendor_id",
-
-        "user_id",
-
-        "avg_rating",
-
-        "review_count"
-
-    }
-
-    for key,value in update_data.items():
-
-        if key in blocked:
-
-            continue
+    for k,v in update_data.items():
 
         setattr(
 
             vendor,
 
-            key,
+            k,
 
-            value
+            v
 
         )
 
     db.commit()
 
-    db.refresh(
-
-        vendor
-
-    )
+    db.refresh(vendor)
 
     return vendor
 
@@ -877,11 +917,5 @@ def deactivate_vendor(
     vendor.is_active=False
 
     db.commit()
-
-    db.refresh(
-
-        vendor
-
-    )
 
     return vendor

@@ -2,6 +2,7 @@ import asyncio
 import hashlib
 import logging
 import time
+from typing import Any
 
 from app.ai.cache_handler import (
     CacheHandler
@@ -28,7 +29,7 @@ from app.core.config import (
 )
 
 
-logger = logging.getLogger(
+logger=logging.getLogger(
 
     __name__
 
@@ -37,15 +38,15 @@ logger = logging.getLogger(
 
 class AIService:
 
-    CACHE_ENABLED = True
+    CACHE_ENABLED=True
 
-    MAX_RETRIES = 2
+    MAX_RETRIES=2
 
-    REQUEST_TIMEOUT = 30
+    REQUEST_TIMEOUT=30
 
-    GROQ_TEMPERATURE = 0.15
+    TEMPERATURE=0.15
 
-    MAX_OUTPUT_TOKENS = 120
+    MAX_OUTPUT_TOKENS=120
 
     def __init__(
 
@@ -53,27 +54,27 @@ class AIService:
 
     ):
 
-        self.client = (
+        self.client=(
 
             LLMFactory
             .get_client()
 
         )
 
-        self.model = (
+        self.model=(
 
             LLMFactory
             .get_model()
 
         )
 
-        self.cache = (
+        self.cache=(
 
             CacheHandler()
 
         )
 
-        self.provider = (
+        self.provider=(
 
             settings
             .AI_PROVIDER
@@ -85,11 +86,11 @@ class AIService:
 
         self,
 
-        prompt: str
+        prompt:str
 
     ):
 
-        start = time.time()
+        start=time.time()
 
         try:
 
@@ -99,7 +100,7 @@ class AIService:
 
             )
 
-            cache_key = (
+            cache_key=(
 
                 hashlib.md5(
 
@@ -113,15 +114,13 @@ class AIService:
 
                     ).encode()
 
-                )
-
-                .hexdigest()
+                ).hexdigest()
 
             )
 
             if self.CACHE_ENABLED:
 
-                cached = (
+                cached=(
 
                     await self.cache.get(
 
@@ -133,35 +132,19 @@ class AIService:
 
                 if cached:
 
-                    logger.info(
-
-                        "CACHE HIT"
-
-                    )
-
                     return cached
 
-            response = None
+            response=None
 
             for attempt in range(
 
-                self.MAX_RETRIES + 1
+                self.MAX_RETRIES+1
 
             ):
 
                 try:
 
-                    logger.info(
-
-                        "%s ATTEMPT %s",
-
-                        self.provider,
-
-                        attempt + 1
-
-                    )
-
-                    response = await (
+                    response=await(
 
                         asyncio.wait_for(
 
@@ -185,7 +168,7 @@ class AIService:
 
                 except Exception:
 
-                    if (
+                    if(
 
                         attempt
 
@@ -211,7 +194,7 @@ class AIService:
 
                 )
 
-            latency = round(
+            latency=round(
 
                 (
 
@@ -221,27 +204,23 @@ class AIService:
 
                     start
 
-                )
-
-                *
-
-                1000,
+                )*1000,
 
                 2
 
             )
 
-            result = {
+            result={
 
-                "success": True,
+                "success":True,
 
                 "response":
 
                 response.strip(),
 
-                "error": None,
+                "error":None,
 
-                "metadata": {
+                "metadata":{
 
                     "provider":
 
@@ -269,25 +248,17 @@ class AIService:
 
                 )
 
-            logger.info(
-
-                "AI SUCCESS %sms",
-
-                latency
-
-            )
-
             return result
 
         except asyncio.TimeoutError:
 
             logger.exception(
 
-                "LLM TIMEOUT"
+                "TIMEOUT"
 
             )
 
-            return (
+            return(
 
                 FallbackHandler
                 .get_fallback_response()
@@ -298,17 +269,17 @@ class AIService:
 
             logger.exception(
 
-                "LLM FAILURE"
+                "AI FAILURE"
 
             )
 
-            return {
+            return{
 
-                "success": False,
+                "success":False,
 
-                "response": None,
+                "response":None,
 
-                "error": str(
+                "error":str(
 
                     e
 
@@ -320,21 +291,27 @@ class AIService:
 
         self,
 
-        prompt: str
+        prompt:str
 
     ):
 
-        if (
+        if(
 
             self.provider
 
-            ==
+            in
 
-            "groq"
+            [
+
+                "groq",
+
+                "modelscope"
+
+            ]
 
         ):
 
-            response = (
+            response=(
 
                 self.client
                 .chat
@@ -361,7 +338,7 @@ class AIService:
 
                     temperature=
 
-                    self.GROQ_TEMPERATURE,
+                    self.TEMPERATURE,
 
                     max_tokens=
 
@@ -371,7 +348,7 @@ class AIService:
 
             )
 
-            return (
+            return(
 
                 response
                 .choices[0]
@@ -379,37 +356,63 @@ class AIService:
 
             )
 
-        response = (
+        elif(
 
-            self.client
-            .models
-            .generate_content(
+            self.provider
 
-                model=
+            ==
 
-                self.model,
+            "gemini"
 
-                contents=
+        ):
 
-                prompt
+            gemini_client:Any=(
+
+                self.client
 
             )
 
-        )
+            response=(
 
-        return response.text
+                gemini_client
+                .models
+                .generate_content(
+
+                    model=
+
+                    self.model,
+
+                    contents=
+
+                    prompt
+
+                )
+
+            )
+
+            return(
+
+                response.text
+
+            )
+
+        raise RuntimeError(
+
+            f"Unsupported provider {self.provider}"
+
+        )
 
     async def execute_prompt_file(
 
         self,
 
-        prompt_file: str,
+        prompt_file:str,
 
-        user_input: str
+        user_input:str
 
     ):
 
-        template = (
+        template=(
 
             PromptLoader
             .load_prompt(
@@ -420,7 +423,7 @@ class AIService:
 
         )
 
-        final_prompt = (
+        prompt=(
 
             f"{template}\n\n"
 
@@ -428,11 +431,11 @@ class AIService:
 
         )
 
-        return await (
+        return await(
 
             self.execute_prompt(
 
-                final_prompt
+                prompt
 
             )
 

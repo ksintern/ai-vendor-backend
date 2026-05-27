@@ -20,10 +20,6 @@ from app.ai.data_orchestrator import (
     DataOrchestrator
 )
 
-from app.ai.context_builder import (
-    ContextBuilder
-)
-
 from app.ai.session_manager import (
     SessionManager
 )
@@ -35,72 +31,56 @@ from app.schemas.chat_schema import (
 
 class ChatService:
 
-    QUICK_REPLIES = {
+    QUICK_REPLIES={
 
         "hi":
-        "Hello. How can I help with your event planning today?",
+        "Hello 👋 Tell me your event requirements and I'll help find vendors.",
 
         "hello":
-        "Hello. Tell me what kind of vendor you're looking for.",
+        "Hello 👋 Tell me what vendor you're looking for.",
 
         "hey":
-        "Hey. What can I help you find today?"
+        "Hey 👋 What can I help you find today?"
 
     }
 
-    MAX_VENDOR_CARDS = 3
+    FOLLOWUP_QUESTIONS={
 
-    FOLLOWUP_QUESTIONS = {
+        "city":
+        "Sure. Which city should I look in?",
 
-        "city":[
+        "budget":
+        "What's your approximate budget?",
 
-            "Sure. Which city should I look in?",
-
-            "Got it. Which city is your event in?"
-
-        ],
-
-        "budget":[
-
-            "Got it. What's your approximate budget?",
-
-            "Okay. What's your budget range?"
-
-        ],
-
-        "guest_count":[
-
-            "Perfect. Around how many guests are expected?",
-
-            "Okay. Roughly how many guests are you planning for?"
-
-        ],
-
-        "cuisine":[
-
-            "Any preferred cuisine?"
-
-        ],
-
-        "event_type":[
-
-            "What's the event type?"
-
-        ]
+        "guest_count":
+        "Around how many guests are expected?"
 
     }
 
-    ACKNOWLEDGEMENTS=[
+    SERVICE_TERMS={
 
-        "Got it.",
+        "service",
+        "services",
+        "provide",
+        "provides",
+        "offering",
+        "offer",
+        "other",
+        "else"
 
-        "Perfect.",
+    }
 
-        "Okay.",
+    REFINEMENT_TERMS={
 
-        "Sounds good."
+        "luxury",
+        "premium",
+        "cheap",
+        "budget",
+        "affordable"
 
-    ]
+    }
+
+    MAX_VENDOR_CARDS=3
 
     def __init__(
 
@@ -141,7 +121,6 @@ class ChatService:
             user_message=(
 
                 payload.message
-
                 .strip()
 
             )
@@ -149,7 +128,6 @@ class ChatService:
             lower=(
 
                 user_message
-
                 .lower()
 
             )
@@ -161,15 +139,11 @@ class ChatService:
                     "success":True,
 
                     "message":
-
                     self.QUICK_REPLIES[
-
                         lower
-
                     ],
 
                     "session_id":
-
                     session_id,
 
                     "recommendations":[],
@@ -188,10 +162,9 @@ class ChatService:
 
             )
 
-            previous_filters=(
+            previous=(
 
                 SessionManager
-
                 .get_filters(
 
                     session_id
@@ -200,15 +173,85 @@ class ChatService:
 
             )
 
-            extracted=(
+            remembered=(
+
+                SessionManager
+                .get_vendor_memory(
+
+                    session_id
+
+                )
+
+            )
+
+            service_request=any(
+
+                term in lower
+
+                for term
+
+                in self.SERVICE_TERMS
+
+            )
+
+            if (
+
+                remembered
+
+                and
+
+                service_request
+
+            ):
+
+                assistant=(
+
+                    self._service_reply(
+
+                        remembered
+
+                    )
+
+                )
+
+                return {
+
+                    "success":True,
+
+                    "message":
+                    assistant,
+
+                    "session_id":
+                    session_id,
+
+                    "recommendations":[
+
+                        self._vendor_card(
+
+                            vendor
+
+                        )
+
+                        for vendor
+
+                        in remembered[
+                            :self.MAX_VENDOR_CARDS
+                        ]
+
+                    ],
+
+                    "error":None
+
+                }
+
+            filters=(
 
                 QueryParser
-
                 .extract_filters(
 
                     user_message,
 
-                    previous_filters
+                    previous
 
                 )
 
@@ -218,7 +261,7 @@ class ChatService:
 
                 session_id,
 
-                extracted
+                filters
 
             )
 
@@ -228,15 +271,43 @@ class ChatService:
 
                 for k,v
 
-                in extracted.items()
+                in filters.items()
 
                 if v is not None
 
             }
 
+            refinement=any(
+
+                word in lower
+
+                for word
+
+                in self.REFINEMENT_TERMS
+
+            )
+
+            if (
+
+                refinement
+
+                and
+
+                previous
+
+            ):
+
+                filters={
+
+                    **previous,
+
+                    **filters
+
+                }
+
             missing=(
 
-                self._find_missing_field(
+                self._find_missing(
 
                     filters
 
@@ -246,20 +317,26 @@ class ChatService:
 
             recommendations=[]
 
-            assistant=""
+            if missing:
 
-            if not missing:
+                assistant=(
+
+                    self.FOLLOWUP_QUESTIONS[
+                        missing
+                    ]
+
+                )
+
+            else:
 
                 intent=(
 
                     IntentExtractor
-
                     .extract(
 
                         user_message
 
                     )
-
                     .get(
 
                         "intent",
@@ -273,7 +350,6 @@ class ChatService:
                 context=(
 
                     DataOrchestrator
-
                     .fetch_context(
 
                         self.db,
@@ -289,7 +365,6 @@ class ChatService:
                 recommendations=(
 
                     context
-
                     .get(
 
                         "recommendations",
@@ -297,7 +372,6 @@ class ChatService:
                         {}
 
                     )
-
                     .get(
 
                         "vendors",
@@ -309,6 +383,14 @@ class ChatService:
                 )
 
                 if recommendations:
+
+                    SessionManager.set_vendor_memory(
+
+                        session_id,
+
+                        recommendations
+
+                    )
 
                     assistant=(
 
@@ -324,34 +406,6 @@ class ChatService:
 
                     )
 
-            else:
-
-                acknowledgement=(
-
-                    self._acknowledge(
-
-                        filters
-
-                    )
-
-                )
-
-                question=(
-
-                    self.FOLLOWUP_QUESTIONS[
-                        missing
-                    ][0]
-
-                )
-
-                assistant=(
-
-                    f"{acknowledgement} {question}"
-
-                    .strip()
-
-                )
-
             SessionManager.add_message(
 
                 session_id,
@@ -362,43 +416,45 @@ class ChatService:
 
             )
 
-            cards=[
-
-                self._vendor_card(
-
-                    vendor
-
-                )
-
-                for vendor
-
-                in recommendations[
-                    :self.MAX_VENDOR_CARDS
-                ]
-
-            ]
-
             return {
 
                 "success":True,
 
                 "message":
-
                 assistant,
 
                 "session_id":
-
                 session_id,
 
-                "recommendations":
+                "recommendations":[
 
-                cards,
+                    self._vendor_card(
+
+                        vendor
+
+                    )
+
+                    for vendor
+
+                    in recommendations[
+                        :self.MAX_VENDOR_CARDS
+                    ]
+
+                ],
 
                 "error":None
 
             }
 
         except Exception as e:
+
+            print(
+
+                "CHAT ERROR:",
+
+                str(e)
+
+            )
 
             return {
 
@@ -407,46 +463,149 @@ class ChatService:
                 "message":"",
 
                 "session_id":
-
                 session_id,
 
                 "recommendations":[],
 
                 "error":
-
                 str(e)
 
             }
 
-    def _acknowledge(
+    def _service_reply(
 
         self,
-
-        filters
+        vendors
 
     ):
 
-        count=len(
+        vendor = vendors[0]
 
-            filters
+        sections = []
+
+        teams = (
+
+            getattr(
+
+                vendor,
+
+                "managed_teams",
+
+                []
+
+            )
+
+            or
+
+            []
 
         )
 
-        if count<=1:
+        for team in teams:
 
-            return ""
+            category_name = (
 
-        if count==2:
+                getattr(
 
-            return "Got it."
+                    team,
 
-        if count==3:
+                    "name",
 
-            return "Perfect."
+                    ""
 
-        return "Sounds good."
+                )
 
-    def _find_missing_field(
+            )
+
+            service_names = [
+
+                service.service_name
+
+                for service in getattr(
+
+                    team,
+
+                    "service_records",
+
+                    []
+
+                )
+
+                if getattr(
+
+                    service,
+
+                    "service_name",
+
+                    None
+
+                )
+
+            ]
+
+            if service_names:
+
+                sections.append(
+
+                    f"{category_name}: "
+
+                    +
+
+                    ", ".join(
+
+                        service_names
+
+                    )
+
+                )
+
+            elif category_name:
+
+                sections.append(
+
+                    category_name
+
+                )
+
+        if not sections:
+
+            print(
+
+                "DEBUG ROOT:",
+
+                vendor.name
+
+            )
+
+            print(
+
+                "DEBUG TEAMS:",
+
+                vendor.managed_teams
+
+            )
+
+            return (
+
+                "No service information available."
+
+            )
+
+        return (
+
+            f"{vendor.name} provides:\n\n"
+
+            +
+
+            "\n".join(
+
+                sections
+
+            )
+
+        )
+    
+    def _find_missing(
 
         self,
 
@@ -515,7 +674,6 @@ class ChatService:
         return {
 
             "vendor_id":
-
             str(
 
                 vendor.vendor_id
@@ -523,15 +681,12 @@ class ChatService:
             ),
 
             "name":
-
             vendor.name,
 
             "city":
-
             vendor.city,
 
             "rating":
-
             getattr(
 
                 vendor,
@@ -543,11 +698,9 @@ class ChatService:
             ),
 
             "price_min":
-
             vendor.price_min,
 
             "price_max":
-
             vendor.price_max
 
         }

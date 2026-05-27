@@ -10,15 +10,10 @@ class IntentExtractor:
     COMPARISON = {
 
         "compare",
-
         "comparison",
-
         "difference",
-
         "better",
-
         "vs",
-
         "versus"
 
     }
@@ -26,19 +21,12 @@ class IntentExtractor:
     PRICING = {
 
         "price",
-
         "pricing",
-
         "budget",
-
         "cheap",
-
         "premium",
-
         "luxury",
-
         "cost",
-
         "affordable"
 
     }
@@ -46,7 +34,6 @@ class IntentExtractor:
     CATEGORY = {
 
         "category",
-
         "categories"
 
     }
@@ -54,13 +41,9 @@ class IntentExtractor:
     REVIEW = {
 
         "rating",
-
         "review",
-
         "reviews",
-
         "best",
-
         "top"
 
     }
@@ -68,7 +51,6 @@ class IntentExtractor:
     AVAILABILITY = {
 
         "available",
-
         "availability"
 
     }
@@ -76,11 +58,8 @@ class IntentExtractor:
     ANALYTICS = {
 
         "analytics",
-
         "trend",
-
         "statistics",
-
         "insights"
 
     }
@@ -88,12 +67,35 @@ class IntentExtractor:
     SAVED = {
 
         "saved",
-
         "wishlist",
-
         "bookmark"
 
     }
+
+    SERVICE = {
+
+        "service",
+        "services",
+        "provide",
+        "provides",
+        "offering",
+        "offer"
+
+    }
+
+    COMPARE_PATTERNS=[
+
+        r"\bcompare\b",
+
+        r"\bvs\b",
+
+        r"\bversus\b",
+
+        r"\bbetter\b",
+
+        r"\bdifference\b"
+
+    ]
 
     @staticmethod
     def extract(
@@ -110,6 +112,46 @@ class IntentExtractor:
 
         )
 
+        filters=(
+
+            QueryParser
+            .extract_filters(
+
+                query
+
+            )
+
+        )
+
+        vendor_names=(
+
+            IntentExtractor
+            ._extract_vendor_names(
+
+                query
+
+            )
+
+        )
+
+        if len(
+
+            vendor_names
+
+        )>=2:
+
+            filters[
+
+                "comparison_request"
+
+            ]=True
+
+            filters[
+
+                "vendor_names"
+
+            ]=vendor_names
+
         tokens=set(
 
             re.findall(
@@ -122,21 +164,12 @@ class IntentExtractor:
 
         )
 
-        filters=(
-
-            QueryParser
-            .extract_filters(
-
-                query
-
-            )
-
-        )
-
         intent=(
 
             IntentExtractor
             .detect_intent(
+
+                query_lower,
 
                 tokens,
 
@@ -161,19 +194,29 @@ class IntentExtractor:
     @staticmethod
     def detect_intent(
 
+        query:str,
+
         tokens:set,
 
         filters:dict
 
     ):
 
-        if (
+        if filters.get(
 
-            filters.get(
+            "service_request"
 
-                "comparison_request"
+        ):
+
+            return (
+
+                "service_query"
 
             )
+
+        if filters.get(
+
+            "comparison_request"
 
         ):
 
@@ -183,7 +226,36 @@ class IntentExtractor:
 
             )
 
+        for pattern in (
+
+            IntentExtractor
+            .COMPARE_PATTERNS
+
+        ):
+
+            if re.search(
+
+                pattern,
+
+                query
+
+            ):
+
+                return (
+
+                    "comparison_query"
+
+                )
+
         intent_priority=[
+
+            (
+
+                IntentExtractor.SERVICE,
+
+                "service_query"
+
+            ),
 
             (
 
@@ -271,7 +343,9 @@ class IntentExtractor:
 
                 "guest_count",
 
-                "cuisine"
+                "cuisine",
+
+                "event_type"
 
             ]
 
@@ -288,3 +362,72 @@ class IntentExtractor:
             "generic_platform_query"
 
         )
+
+    @staticmethod
+    def _extract_vendor_names(
+
+        query:str
+
+    ):
+
+        lowered=(
+
+            query.lower()
+
+        )
+
+        separators=[
+
+            " vs ",
+
+            " versus ",
+
+            " and "
+
+        ]
+
+        for separator in separators:
+
+            if separator in lowered:
+
+                pieces=[
+
+                    item.strip()
+
+                    for item
+
+                    in lowered.split(
+
+                        separator
+
+                    )
+
+                ]
+
+                cleaned=[]
+
+                for piece in pieces:
+
+                    piece=re.sub(
+
+                        r"\b(compare|better|difference|between|which|is|vendor)\b",
+
+                        "",
+
+                        piece
+
+                    )
+
+                    piece=piece.strip()
+
+                    if piece:
+
+                        cleaned.append(
+
+                            piece
+
+                        )
+
+                return cleaned
+
+        return []

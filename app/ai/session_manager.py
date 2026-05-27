@@ -12,11 +12,11 @@ import time
 
 class SessionManager:
 
-    MAX_MESSAGES = 6
+    MAX_MESSAGES = 12
 
-    MAX_CONTEXT_CHARS = 800
+    MAX_CONTEXT_CHARS = 1500
 
-    SESSION_TTL = 3600
+    SESSION_TTL = 7200
 
     _lock = Lock()
 
@@ -25,11 +25,14 @@ class SessionManager:
         lambda: {
 
             "messages": deque(
+
                 maxlen=
                 SessionManager.MAX_MESSAGES
+
             ),
 
             "updated_at":
+
             time.time()
 
         }
@@ -42,6 +45,12 @@ class SessionManager:
 
     )
 
+    _vendor_memory = defaultdict(
+
+        list
+
+    )
+
     @classmethod
     def _touch(
 
@@ -51,13 +60,21 @@ class SessionManager:
 
     ):
 
-        if session_id in cls._sessions:
+        if (
+
+            session_id
+
+            in
+
+            cls._sessions
+
+        ):
 
             cls._sessions[
                 session_id
             ][
                 "updated_at"
-            ] = time.time()
+            ]=time.time()
 
     @classmethod
     def _cleanup(
@@ -66,9 +83,9 @@ class SessionManager:
 
     ):
 
-        now = time.time()
+        now=time.time()
 
-        expired = []
+        expired=[]
 
         for session_id,data in (
 
@@ -79,7 +96,9 @@ class SessionManager:
             if (
 
                 now
+
                 -
+
                 data[
                     "updated_at"
                 ]
@@ -121,9 +140,10 @@ class SessionManager:
 
             return
 
-        cleaned = (
+        cleaned=(
 
             content
+
             .strip()
 
         )
@@ -151,9 +171,11 @@ class SessionManager:
                 {
 
                     "role":
+
                     role,
 
                     "content":
+
                     cleaned
 
                 }
@@ -167,7 +189,7 @@ class SessionManager:
 
         session_id:str,
 
-        limit:int=4
+        limit:int=8
 
     ):
 
@@ -181,7 +203,7 @@ class SessionManager:
 
             )
 
-            messages = list(
+            messages=list(
 
                 cls._sessions
                 .get(
@@ -205,11 +227,7 @@ class SessionManager:
 
         chars=0
 
-        for msg in reversed(
-
-            messages
-
-        ):
+        for msg in messages:
 
             line=(
 
@@ -228,7 +246,9 @@ class SessionManager:
             if (
 
                 chars
+
                 +
+
                 size
 
                 >
@@ -237,17 +257,15 @@ class SessionManager:
 
             ):
 
-                continue
+                break
 
-            history.insert(
-
-                0,
+            history.append(
 
                 line
 
             )
 
-            chars += size
+            chars+=size
 
         return "\n".join(
 
@@ -268,7 +286,13 @@ class SessionManager:
 
         with cls._lock:
 
-            existing = (
+            cls._touch(
+
+                session_id
+
+            )
+
+            existing=(
 
                 cls._filters.get(
 
@@ -280,7 +304,7 @@ class SessionManager:
 
             )
 
-            merged = {
+            merged={
 
                 **existing,
 
@@ -300,7 +324,7 @@ class SessionManager:
 
             cls._filters[
                 session_id
-            ] = merged
+            ]=merged
 
     @classmethod
     def get_filters(
@@ -311,15 +335,131 @@ class SessionManager:
 
     ):
 
-        return dict(
+        with cls._lock:
 
-            cls._filters.get(
+            cls._cleanup()
 
-                session_id,
+            cls._touch(
 
-                {}
+                session_id
 
             )
+
+            return dict(
+
+                cls._filters.get(
+
+                    session_id,
+
+                    {}
+
+                )
+
+            )
+
+    @classmethod
+    def set_vendor_memory(
+
+        cls,
+
+        session_id:str,
+
+        vendors:list
+
+    ):
+
+        with cls._lock:
+
+            cls._touch(
+
+                session_id
+
+            )
+
+            cls._vendor_memory[
+                session_id
+            ]=vendors
+
+    @classmethod
+    def get_vendor_memory(
+
+        cls,
+
+        session_id:str
+
+    ):
+
+        with cls._lock:
+
+            cls._cleanup()
+
+            cls._touch(
+
+                session_id
+
+            )
+
+            return (
+
+                cls._vendor_memory.get(
+
+                    session_id,
+
+                    []
+
+                )
+
+            )
+
+    @classmethod
+    def memory_summary(
+
+        cls,
+
+        session_id:str
+
+    ):
+
+        filters=(
+
+            cls.get_filters(
+
+                session_id
+
+            )
+
+        )
+
+        if not filters:
+
+            return ""
+
+        return ", ".join(
+
+            f"{k}:{v}"
+
+            for k,v
+
+            in filters.items()
+
+        )
+
+    @classmethod
+    def session_exists(
+
+        cls,
+
+        session_id:str
+
+    ):
+
+        return (
+
+            session_id
+
+            in
+
+            cls._sessions
 
         )
 
@@ -341,6 +481,14 @@ class SessionManager:
         )
 
         cls._filters.pop(
+
+            session_id,
+
+            None
+
+        )
+
+        cls._vendor_memory.pop(
 
             session_id,
 

@@ -39,7 +39,9 @@ class DataOrchestrator:
 
         "comparison_query",
 
-        "review_query"
+        "review_query",
+
+        "service_query"
 
     }
 
@@ -64,16 +66,17 @@ class DataOrchestrator:
 
         ):
 
-            return (
+            return {
 
-                DataOrchestrator
-                ._empty(
+                "intent":
 
-                    intent
+                intent,
 
-                )
+                "context": {},
 
-            )
+                "recommendations": {}
+
+            }
 
         handlers = {
 
@@ -103,26 +106,29 @@ class DataOrchestrator:
 
             "category_query":
 
-            DataOrchestrator.category_context
+            DataOrchestrator.category_context,
+
+            "service_query":
+
+            DataOrchestrator.service_context
 
         }
 
-        try:
+        handler=(
 
-            handler = (
+            handlers.get(
 
-                handlers.get(
+                intent,
 
-                    intent,
-
-                    DataOrchestrator
-                    .generic_context
-
-                )
+                DataOrchestrator.generic_context
 
             )
 
-            raw_context = (
+        )
+
+        try:
+
+            raw_context=(
 
                 handler(
 
@@ -134,47 +140,113 @@ class DataOrchestrator:
 
             )
 
-        except Exception:
+        except Exception as e:
 
-            raw_context = {}
+            print(
 
-        recommendations = {}
+                "ORCHESTRATOR ERROR:",
 
-        if (
+                str(e)
 
-            intent
+            )
 
-            in
+            raw_context={}
 
-            DataOrchestrator
-            .RECOMMENDATION_INTENTS
+        recommendations={}
 
-            and
+        vendors=(
 
-            raw_context
+            raw_context.get(
 
-        ):
+                "vendors",
 
-            try:
+                []
 
-                recommendations = (
+            )
 
-                    RecommendationEngine
-                    .get_recommendations(
+        )
 
-                        db,
+        if vendors:
 
-                        raw_context,
+            recommendations={
 
-                        filters
+                "vendors":
+
+                vendors
+
+            }
+
+            if (
+
+                intent
+
+                in
+
+                DataOrchestrator.RECOMMENDATION_INTENTS
+
+            ):
+
+                try:
+
+                    ranked=(
+
+                        RecommendationEngine
+
+                        .get_recommendations(
+
+                            db,
+
+                            raw_context,
+
+                            filters
+
+                        )
 
                     )
 
+                    ranked_vendors=(
+
+                        ranked.get(
+
+                            "vendors",
+
+                            []
+
+                        )
+
+                    )
+
+                    if ranked_vendors:
+
+                        recommendations={
+
+                            "vendors":
+
+                            ranked_vendors
+
+                        }
+
+                except Exception:
+
+                    pass
+
+        print(
+
+            "FOUND VENDORS:",
+
+            len(
+
+                recommendations.get(
+
+                    "vendors",
+
+                    []
+
                 )
 
-            except Exception:
+            )
 
-                recommendations = {}
+        )
 
         return {
 
@@ -201,9 +273,10 @@ class DataOrchestrator:
 
     ):
 
-        result = (
+        result=(
 
             vendor_repository
+
             .search_vendors_ai(
 
                 db,
@@ -214,13 +287,42 @@ class DataOrchestrator:
 
         )
 
-        vendors = (
+        return {
+
+            "vendors":
 
             result.get(
 
                 "vendors",
 
                 []
+
+            )[
+
+                :DataOrchestrator.MAX_VENDORS
+
+            ]
+
+        }
+
+    @staticmethod
+    def service_context(
+
+        db,
+
+        filters
+
+    ):
+
+        result=(
+
+            vendor_repository
+
+            .search_vendors_ai(
+
+                db,
+
+                filters
 
             )
 
@@ -230,10 +332,15 @@ class DataOrchestrator:
 
             "vendors":
 
-            vendors[
+            result.get(
 
-                :DataOrchestrator
-                .MAX_VENDORS
+                "vendors",
+
+                []
+
+            )[
+
+                :DataOrchestrator.MAX_VENDORS
 
             ]
 
@@ -248,7 +355,7 @@ class DataOrchestrator:
 
     ):
 
-        budget = (
+        budget=(
 
             filters.get(
 
@@ -262,21 +369,27 @@ class DataOrchestrator:
 
             return {}
 
-        return {
-
-            "vendors":
+        vendors=(
 
             vendor_repository
+
             .budget_vendors_ai(
 
                 db,
 
                 budget
 
-            )[
+            )
 
-                :DataOrchestrator
-                .MAX_VENDORS
+        )
+
+        return {
+
+            "vendors":
+
+            vendors[
+
+                :DataOrchestrator.MAX_VENDORS
 
             ]
 
@@ -291,7 +404,7 @@ class DataOrchestrator:
 
     ):
 
-        names = (
+        names=(
 
             filters.get(
 
@@ -312,6 +425,7 @@ class DataOrchestrator:
             "vendors":
 
             vendor_repository
+
             .compare_vendors_ai(
 
                 db,
@@ -331,19 +445,25 @@ class DataOrchestrator:
 
     ):
 
-        return {
-
-            "vendors":
+        vendors=(
 
             vendor_repository
+
             .top_rated_vendors_ai(
 
                 db
 
-            )[
+            )
 
-                :DataOrchestrator
-                .MAX_VENDORS
+        )
+
+        return {
+
+            "vendors":
+
+            vendors[
+
+                :DataOrchestrator.MAX_VENDORS
 
             ]
 
@@ -363,6 +483,7 @@ class DataOrchestrator:
             "analytics":
 
             vendor_repository
+
             .vendor_analytics_ai(
 
                 db
@@ -385,14 +506,14 @@ class DataOrchestrator:
             "categories":
 
             category_repository
+
             .get_all_categories(
 
                 db
 
             )[
 
-                :DataOrchestrator
-                .MAX_CATEGORIES
+                :DataOrchestrator.MAX_CATEGORIES
 
             ]
 
@@ -408,22 +529,3 @@ class DataOrchestrator:
     ):
 
         return {}
-
-    @staticmethod
-    def _empty(
-
-        intent
-
-    ):
-
-        return {
-
-            "intent":
-
-            intent,
-
-            "context": {},
-
-            "recommendations": {}
-
-        }

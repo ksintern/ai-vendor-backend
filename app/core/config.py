@@ -48,6 +48,13 @@ class Settings(
 
 
     # -----------------------------
+    # MODELSCOPE
+    # -----------------------------
+
+    MODELSCOPE_API_KEY:str|None=None
+
+
+    # -----------------------------
     # AI
     # -----------------------------
 
@@ -75,13 +82,22 @@ class Settings(
     )
 
 
-settings = Settings()  # type: ignore
+settings=Settings()  # type: ignore
+
 
 print(
 
     "GROQ KEY:",
 
     settings.GROQ_API_KEY
+
+)
+
+print(
+
+    "MODELSCOPE KEY:",
+
+    settings.MODELSCOPE_API_KEY
 
 )
 
