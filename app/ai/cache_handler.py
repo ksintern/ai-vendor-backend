@@ -1,14 +1,20 @@
+import time
+
+
 class CacheHandler:
 
     """
-    Cache abstraction layer.
+    Lightweight in-memory cache
 
     Future support:
 
     - Redis
-    - In-memory cache
     - Distributed cache
+    - Persistent cache
     """
+
+    _cache = {}
+
 
     async def get(
 
@@ -18,7 +24,49 @@ class CacheHandler:
 
     ):
 
-        return None
+        item = (
+
+            self._cache.get(
+
+                key
+
+            )
+
+        )
+
+        if not item:
+
+            return None
+
+        expires_at = (
+
+            item["expires_at"]
+
+        )
+
+        if (
+
+            time.time()
+
+            >
+
+            expires_at
+
+        ):
+
+            del self._cache[
+
+                key
+
+            ]
+
+            return None
+
+        return item[
+
+            "value"
+
+        ]
 
 
     async def set(
@@ -33,7 +81,25 @@ class CacheHandler:
 
     ):
 
-        pass
+        self._cache[
+
+            key
+
+        ] = {
+
+            "value":
+
+            value,
+
+            "expires_at":
+
+            time.time()
+
+            +
+
+            ttl
+
+        }
 
 
     async def delete(
@@ -44,4 +110,19 @@ class CacheHandler:
 
     ):
 
-        pass
+        self._cache.pop(
+
+            key,
+
+            None
+
+        )
+
+
+    async def clear(
+
+        self
+
+    ):
+
+        self._cache.clear()

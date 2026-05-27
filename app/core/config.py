@@ -1,56 +1,102 @@
 from pydantic_settings import (
+
     BaseSettings,
+
     SettingsConfigDict
+
 )
 
 
-class Settings(BaseSettings):
+class Settings(
+
+    BaseSettings
+
+):
 
     # -----------------------------
-    # DATABASE CONFIGURATION
+    # DATABASE
     # -----------------------------
 
-    DATABASE_URL: str
+    DATABASE_URL:str
+
 
     # -----------------------------
-    # JWT CONFIGURATION
+    # JWT
     # -----------------------------
 
-    SECRET_KEY: str
+    SECRET_KEY:str
 
-    ALGORITHM: str = "HS256"
+    ALGORITHM:str="HS256"
 
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 15
+    ACCESS_TOKEN_EXPIRE_MINUTES:int=15
 
-    REFRESH_TOKEN_EXPIRE_DAYS: int = 7
+    REFRESH_TOKEN_EXPIRE_DAYS:int=7
 
-    # -----------------------------
-    # GEMINI CONFIGURATION
-    # -----------------------------
-
-    GEMINI_API_KEY: str | None = None
 
     # -----------------------------
-    # AI CONFIGURATION
+    # GEMINI
     # -----------------------------
 
-    AI_PROVIDER: str = "gemini"
+    GEMINI_API_KEY:str|None=None
 
-    AI_MODEL: str = "gemini-2.5-flash"
-
-    AI_TIMEOUT: int = 30
 
     # -----------------------------
-    # ENV CONFIGURATION
+    # GROQ
     # -----------------------------
 
-    model_config = SettingsConfigDict(
+    GROQ_API_KEY:str|None=None
 
-        env_file=".env",
 
-        extra="ignore"
+    # -----------------------------
+    # AI
+    # -----------------------------
+
+    AI_PROVIDER:str="groq"
+
+    AI_MODEL:str="llama-3.1-8b-instant"
+
+    AI_TIMEOUT:int=45
+
+
+    # -----------------------------
+    # ENV
+    # -----------------------------
+
+    model_config=(
+
+        SettingsConfigDict(
+
+            env_file=".env",
+
+            extra="ignore"
+
+        )
 
     )
 
 
 settings = Settings()  # type: ignore
+
+print(
+
+    "GROQ KEY:",
+
+    settings.GROQ_API_KEY
+
+)
+
+print(
+
+    "AI PROVIDER:",
+
+    settings.AI_PROVIDER
+
+)
+
+print(
+
+    "AI MODEL:",
+
+    settings.AI_MODEL
+
+)

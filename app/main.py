@@ -41,6 +41,10 @@ from app.api.routes.ai import (
     router as ai_router
 )
 
+from app.api.routes.chat import (
+    router as chat_router
+)
+
 
 # =====================================
 # EXCEPTION HANDLERS
@@ -138,13 +142,9 @@ Base.metadata.create_all(
 
 app = FastAPI(
 
-    title=
+    title="AI Vendor Discovery Agent API",
 
-    "AI Vendor Discovery Agent API",
-
-    version=
-
-    "1.0.0"
+    version="1.0.0"
 
 )
 
@@ -174,9 +174,7 @@ app.add_middleware(
 
     CORSMiddleware,
 
-    allow_origins=
-
-    origins,
+    allow_origins=origins,
 
     allow_credentials=True,
 
@@ -327,5 +325,11 @@ app.include_router(
 app.include_router(
 
     ai_router
+
+)
+
+app.include_router(
+
+    chat_router
 
 )

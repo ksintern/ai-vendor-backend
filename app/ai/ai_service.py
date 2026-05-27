@@ -1,33 +1,85 @@
 import asyncio
+import hashlib
+import logging
 import time
 
-from app.ai.llm_factory import (
-    LLMFactory
-)
-
-from app.ai.prompt_loader import (
-    PromptLoader
+from app.ai.cache_handler import (
+    CacheHandler
 )
 
 from app.ai.fallback_handler import (
     FallbackHandler
 )
 
-from app.ai.cache_handler import (
-    CacheHandler
+from app.ai.llm_factory import (
+    LLMFactory
+)
+
+from app.ai.prompt_guard import (
+    PromptGuard
+)
+
+from app.ai.prompt_loader import (
+    PromptLoader
+)
+
+from app.core.config import (
+    settings
+)
+
+
+logger = logging.getLogger(
+
+    __name__
+
 )
 
 
 class AIService:
 
-    def __init__(self):
+    CACHE_ENABLED = True
 
-        self.client = LLMFactory.get_client()
+    MAX_RETRIES = 2
 
-        self.model = LLMFactory.get_model()
+    REQUEST_TIMEOUT = 30
 
-        self.cache = CacheHandler()
+    GROQ_TEMPERATURE = 0.15
 
+    MAX_OUTPUT_TOKENS = 120
+
+    def __init__(
+
+        self
+
+    ):
+
+        self.client = (
+
+            LLMFactory
+            .get_client()
+
+        )
+
+        self.model = (
+
+            LLMFactory
+            .get_model()
+
+        )
+
+        self.cache = (
+
+            CacheHandler()
+
+        )
+
+        self.provider = (
+
+            settings
+            .AI_PROVIDER
+            .lower()
+
+        )
 
     async def execute_prompt(
 
@@ -37,39 +89,143 @@ class AIService:
 
     ):
 
-        cache_key = f"prompt:{prompt}"
-
-        cached = await self.cache.get(
-
-            cache_key
-
-        )
-
-        if cached:
-
-            return cached
-
-        start_time = time.time()
+        start = time.time()
 
         try:
 
-            response = await asyncio.to_thread(
+            PromptGuard.validate(
 
-                lambda:
-
-                self.client.models.generate_content(
-
-                    model=self.model,
-
-                    contents=prompt
-
-                )
+                prompt
 
             )
 
+            cache_key = (
+
+                hashlib.md5(
+
+                    (
+
+                        self.provider
+                        +
+                        self.model
+                        +
+                        prompt
+
+                    ).encode()
+
+                )
+
+                .hexdigest()
+
+            )
+
+            if self.CACHE_ENABLED:
+
+                cached = (
+
+                    await self.cache.get(
+
+                        cache_key
+
+                    )
+
+                )
+
+                if cached:
+
+                    logger.info(
+
+                        "CACHE HIT"
+
+                    )
+
+                    return cached
+
+            response = None
+
+            for attempt in range(
+
+                self.MAX_RETRIES + 1
+
+            ):
+
+                try:
+
+                    logger.info(
+
+                        "%s ATTEMPT %s",
+
+                        self.provider,
+
+                        attempt + 1
+
+                    )
+
+                    response = await (
+
+                        asyncio.wait_for(
+
+                            asyncio.to_thread(
+
+                                self._generate,
+
+                                prompt
+
+                            ),
+
+                            timeout=
+
+                            self.REQUEST_TIMEOUT
+
+                        )
+
+                    )
+
+                    break
+
+                except Exception:
+
+                    if (
+
+                        attempt
+
+                        >=
+
+                        self.MAX_RETRIES
+
+                    ):
+
+                        raise
+
+                    await asyncio.sleep(
+
+                        1
+
+                    )
+
+            if not response:
+
+                raise RuntimeError(
+
+                    "Empty AI response"
+
+                )
+
             latency = round(
 
-                (time.time() - start_time) * 1000,
+                (
+
+                    time.time()
+
+                    -
+
+                    start
+
+                )
+
+                *
+
+                1000,
 
                 2
 
@@ -79,51 +235,70 @@ class AIService:
 
                 "success": True,
 
-                "response": response.text,
+                "response":
+
+                response.strip(),
 
                 "error": None,
 
                 "metadata": {
 
-                    "provider": "gemini",
+                    "provider":
 
-                    "model": self.model,
+                    self.provider,
 
-                    "latency_ms": latency,
+                    "model":
 
-                    "fallback": False
+                    self.model,
+
+                    "latency_ms":
+
+                    latency
 
                 }
 
             }
 
-            await self.cache.set(
+            if self.CACHE_ENABLED:
 
-                cache_key,
+                await self.cache.set(
 
-                result
+                    cache_key,
+
+                    result
+
+                )
+
+            logger.info(
+
+                "AI SUCCESS %sms",
+
+                latency
 
             )
 
             return result
 
-        except TimeoutError:
+        except asyncio.TimeoutError:
+
+            logger.exception(
+
+                "LLM TIMEOUT"
+
+            )
 
             return (
 
                 FallbackHandler
-
                 .get_fallback_response()
 
             )
 
         except Exception as e:
 
-            latency = round(
+            logger.exception(
 
-                (time.time() - start_time) * 1000,
-
-                2
+                "LLM FAILURE"
 
             )
 
@@ -133,22 +308,96 @@ class AIService:
 
                 "response": None,
 
-                "error": str(e),
+                "error": str(
 
-                "metadata": {
+                    e
 
-                    "provider": "gemini",
-
-                    "model": self.model,
-
-                    "latency_ms": latency,
-
-                    "fallback": False
-
-                }
+                )
 
             }
 
+    def _generate(
+
+        self,
+
+        prompt: str
+
+    ):
+
+        if (
+
+            self.provider
+
+            ==
+
+            "groq"
+
+        ):
+
+            response = (
+
+                self.client
+                .chat
+                .completions
+                .create(
+
+                    model=
+
+                    self.model,
+
+                    messages=[
+
+                        {
+
+                            "role":"user",
+
+                            "content":
+
+                            prompt
+
+                        }
+
+                    ],
+
+                    temperature=
+
+                    self.GROQ_TEMPERATURE,
+
+                    max_tokens=
+
+                    self.MAX_OUTPUT_TOKENS
+
+                )
+
+            )
+
+            return (
+
+                response
+                .choices[0]
+                .message.content
+
+            )
+
+        response = (
+
+            self.client
+            .models
+            .generate_content(
+
+                model=
+
+                self.model,
+
+                contents=
+
+                prompt
+
+            )
+
+        )
+
+        return response.text
 
     async def execute_prompt_file(
 
@@ -163,7 +412,6 @@ class AIService:
         template = (
 
             PromptLoader
-
             .load_prompt(
 
                 prompt_file
@@ -172,18 +420,20 @@ class AIService:
 
         )
 
-        final_prompt = f"""
+        final_prompt = (
 
-{template}
+            f"{template}\n\n"
 
-User Input:
+            f"{user_input}"
 
-{user_input}
+        )
 
-"""
+        return await (
 
-        return await self.execute_prompt(
+            self.execute_prompt(
 
-            final_prompt
+                final_prompt
+
+            )
 
         )

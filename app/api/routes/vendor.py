@@ -12,7 +12,6 @@ from sqlalchemy.orm import Session
 
 from app.db.session import get_db
 from sqlalchemy import func
-
 from app.models.vendor import Vendor
 from app.models.viewed_vendor import ViewedVendor
 from app.models.vendor_follow import VendorFollow
@@ -2285,6 +2284,62 @@ def search_vendors_api(
 
     )
 
+# ==========================================
+# RECOMMENDATIONS
+# ==========================================
+
+@router.get(
+    "/recommendations"
+)
+def get_recommendations_api(
+
+    db: Session = Depends(
+        get_db
+    ),
+
+    current_user: User = Depends(
+        require_role(
+            [
+                "user",
+                "vendor",
+                "admin"
+            ]
+        )
+    )
+
+):
+
+    vendors=(
+
+        db.query(
+            Vendor
+        )
+
+        .filter(
+            Vendor.is_active==True
+        )
+
+        .order_by(
+            desc(
+                Vendor.avg_rating
+            )
+        )
+
+        .limit(
+            10
+        )
+
+        .all()
+
+    )
+
+    return {
+
+        "vendors":
+
+        vendors
+
+    }
 
 # ==========================================
 # SINGLE

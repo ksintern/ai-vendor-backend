@@ -98,7 +98,7 @@ def create_vendor(
 
 
 # =====================================
-# CREATE SERVICE
+# SERVICE
 # =====================================
 
 def create_service(
@@ -117,10 +117,6 @@ def create_service(
 
     return service
 
-
-# =====================================
-# SERVICE BY ID
-# =====================================
 
 def get_service_by_id(
 
@@ -147,10 +143,6 @@ def get_service_by_id(
     )
 
 
-# =====================================
-# CATEGORY SERVICES
-# =====================================
-
 def get_services_by_category(
 
     db: Session,
@@ -176,10 +168,6 @@ def get_services_by_category(
     )
 
 
-# =====================================
-# DUPLICATE SERVICE
-# =====================================
-
 def service_exists(
 
     db: Session,
@@ -201,7 +189,9 @@ def service_exists(
             category_vendor_id,
 
             func.lower(
+
                 Service.service_name
+
             )
 
             ==
@@ -214,10 +204,6 @@ def service_exists(
 
     )
 
-
-# =====================================
-# UPDATE SERVICE
-# =====================================
 
 def rename_service(
 
@@ -238,10 +224,6 @@ def rename_service(
     return service
 
 
-# =====================================
-# DELETE SERVICE
-# =====================================
-
 def delete_service(
 
     db: Session,
@@ -256,7 +238,7 @@ def delete_service(
 
 
 # =====================================
-# VENDOR BY ID
+# VENDOR
 # =====================================
 
 def get_vendor_by_id(
@@ -277,7 +259,11 @@ def get_vendor_by_id(
             ==
             vendor_id,
 
-            Vendor.is_active.is_(True)
+            Vendor.is_active.is_(
+
+                True
+
+            )
 
         )
 
@@ -286,15 +272,11 @@ def get_vendor_by_id(
     )
 
 
-# =====================================
-# EMAIL
-# =====================================
-
 def get_vendor_by_business_email(
 
     db: Session,
 
-    email:str
+    email: str
 
 ):
 
@@ -305,7 +287,9 @@ def get_vendor_by_business_email(
         .filter(
 
             func.lower(
+
                 Vendor.business_email
+
             )
 
             ==
@@ -319,10 +303,6 @@ def get_vendor_by_business_email(
     )
 
 
-# =====================================
-# GET ALL
-# =====================================
-
 def get_all_vendors(
 
     db: Session
@@ -335,9 +315,17 @@ def get_all_vendors(
 
         .filter(
 
-            Vendor.is_active.is_(True),
+            Vendor.parent_vendor_id.is_(
 
-            Vendor.parent_vendor_id.is_(None)
+                None
+
+            ),
+
+            Vendor.is_active.is_(
+
+                True
+
+            )
 
         )
 
@@ -380,7 +368,11 @@ def search_vendors(
 
 ):
 
-    CategoryVendor=aliased(Vendor)
+    CategoryVendor=aliased(
+
+        Vendor
+
+    )
 
     search_query=(
 
@@ -418,14 +410,21 @@ def search_vendors(
 
         .filter(
 
-            Vendor.parent_vendor_id.is_(None),
+            Vendor.parent_vendor_id.is_(
 
-            Vendor.is_active.is_(True)
+                None
+
+            ),
+
+            Vendor.is_active.is_(
+
+                True
+
+            )
 
         )
 
     )
-
 
     if query:
 
@@ -439,22 +438,41 @@ def search_vendors(
 
                 or_(
 
-                    Vendor.name.ilike(pattern),
+                    Vendor.name.ilike(
 
-                    Vendor.description.ilike(pattern),
+                        pattern
 
-                    Vendor.city.ilike(pattern),
+                    ),
 
-                    CategoryVendor.name.ilike(pattern),
+                    Vendor.description.ilike(
 
-                    Service.service_name.ilike(pattern)
+                        pattern
+
+                    ),
+
+                    Vendor.city.ilike(
+
+                        pattern
+
+                    ),
+
+                    CategoryVendor.name.ilike(
+
+                        pattern
+
+                    ),
+
+                    Service.service_name.ilike(
+
+                        pattern
+
+                    )
 
                 )
 
             )
 
         )
-
 
     if city:
 
@@ -474,7 +492,6 @@ def search_vendors(
 
         )
 
-
     if category:
 
         search_query=(
@@ -493,6 +510,43 @@ def search_vendors(
 
         )
 
+    # FIXED PRICE FILTERING
+
+    if min_price is not None:
+
+        search_query=(
+
+            search_query
+
+            .filter(
+
+                Vendor.price_max
+
+                >=
+
+                min_price
+
+            )
+
+        )
+
+    if max_price is not None:
+
+        search_query=(
+
+            search_query
+
+            .filter(
+
+                Vendor.price_min
+
+                <=
+
+                max_price
+
+            )
+
+        )
 
     if available is not None:
 
@@ -503,13 +557,14 @@ def search_vendors(
             .filter(
 
                 Vendor.is_available
+
                 ==
+
                 available
 
             )
 
         )
-
 
     if verified is not None:
 
@@ -520,13 +575,14 @@ def search_vendors(
             .filter(
 
                 Vendor.is_verified
+
                 ==
+
                 verified
 
             )
 
         )
-
 
     search_query=(
 
@@ -539,7 +595,6 @@ def search_vendors(
         )
 
     )
-
 
     if rating:
 
@@ -556,12 +611,12 @@ def search_vendors(
                 )
 
                 >=
+
                 rating
 
             )
 
         )
-
 
     if min_reviews:
 
@@ -578,12 +633,12 @@ def search_vendors(
                 )
 
                 >=
+
                 min_reviews
 
             )
 
         )
-
 
     if sort_by=="rating":
 
@@ -607,7 +662,6 @@ def search_vendors(
 
         )
 
-
     elif sort_by=="price_low":
 
         search_query=(
@@ -625,7 +679,6 @@ def search_vendors(
             )
 
         )
-
 
     elif sort_by=="price_high":
 
@@ -645,7 +698,6 @@ def search_vendors(
 
         )
 
-
     total=search_query.count()
 
     vendors=(
@@ -658,7 +710,11 @@ def search_vendors(
 
         )
 
-        .limit(limit)
+        .limit(
+
+            limit
+
+        )
 
         .all()
 
@@ -668,20 +724,106 @@ def search_vendors(
 
 
 # =====================================
+# AI SEARCH
+# =====================================
+
+def search_vendors_ai(
+
+    db: Session,
+
+    filters: dict
+
+):
+
+    payload={
+
+        "db":db,
+
+        "page":1,
+
+        "limit":10,
+
+        "sort_by":"rating"
+
+    }
+
+    if filters.get(
+
+        "city"
+
+    ):
+
+        payload["city"]=filters["city"]
+
+    if filters.get(
+
+        "category"
+
+    ):
+
+        payload["category"]=filters["category"]
+
+    if filters.get(
+
+        "budget"
+
+    ):
+
+        payload["max_price"]=filters["budget"]
+
+    vendors,total=(
+
+        search_vendors(
+
+            **payload
+
+        )
+
+    )
+
+    if not vendors:
+
+        payload.pop(
+
+            "category",
+
+            None
+
+        )
+
+        vendors,total=(
+
+            search_vendors(
+
+                **payload
+
+            )
+
+        )
+
+    return {
+
+        "vendors":vendors,
+
+        "total":total
+
+    }
+
+# =====================================
 # UPDATE
 # =====================================
 
 def update_vendor(
 
-    db:Session,
+    db: Session,
 
-    vendor:Vendor,
+    vendor: Vendor,
 
-    update_data:dict
+    update_data: dict
 
 ):
 
-    blocked={
+    blocked = {
 
         "vendor_id",
 
@@ -711,7 +853,11 @@ def update_vendor(
 
     db.commit()
 
-    db.refresh(vendor)
+    db.refresh(
+
+        vendor
+
+    )
 
     return vendor
 
@@ -722,9 +868,9 @@ def update_vendor(
 
 def deactivate_vendor(
 
-    db:Session,
+    db: Session,
 
-    vendor:Vendor
+    vendor: Vendor
 
 ):
 
@@ -732,6 +878,10 @@ def deactivate_vendor(
 
     db.commit()
 
-    db.refresh(vendor)
+    db.refresh(
+
+        vendor
+
+    )
 
     return vendor
