@@ -12,10 +12,6 @@ from app.ai.intent_extractor import (
     IntentExtractor
 )
 
-from app.ai.query_parser import (
-    QueryParser
-)
-
 from app.ai.data_orchestrator import (
     DataOrchestrator
 )
@@ -31,7 +27,7 @@ from app.schemas.chat_schema import (
 
 class ChatService:
 
-    QUICK_REPLIES={
+    QUICK_REPLIES = {
 
         "hi":
         "Hello 👋 Tell me your event requirements and I'll help find vendors.",
@@ -44,7 +40,7 @@ class ChatService:
 
     }
 
-    FOLLOWUP_QUESTIONS={
+    FOLLOWUP_QUESTIONS = {
 
         "city":
         "Sure. Which city should I look in?",
@@ -57,7 +53,7 @@ class ChatService:
 
     }
 
-    SERVICE_TERMS={
+    SERVICE_TERMS = {
 
         "service",
         "services",
@@ -70,7 +66,7 @@ class ChatService:
 
     }
 
-    REFINEMENT_TERMS={
+    REFINEMENT_TERMS = {
 
         "luxury",
         "premium",
@@ -80,29 +76,29 @@ class ChatService:
 
     }
 
-    MAX_VENDOR_CARDS=3
+    MAX_VENDOR_CARDS = 3
 
     def __init__(
 
         self,
 
-        db:Session
+        db: Session
 
     ):
 
-        self.db=db
+        self.db = db
 
-        self.ai_service=AIService()
+        self.ai_service = AIService()
 
     async def process_message(
 
         self,
 
-        payload:ChatRequest
+        payload: ChatRequest
 
     ):
 
-        session_id=(
+        session_id = (
 
             payload.session_id
 
@@ -118,25 +114,29 @@ class ChatService:
 
         try:
 
-            user_message=(
+            user_message = (
 
                 payload.message
                 .strip()
 
             )
 
-            lower=(
+            lower = (
 
                 user_message
                 .lower()
 
             )
 
+            # -----------------------------------
+            # QUICK REPLIES
+            # -----------------------------------
+
             if lower in self.QUICK_REPLIES:
 
                 return {
 
-                    "success":True,
+                    "success": True,
 
                     "message":
                     self.QUICK_REPLIES[
@@ -146,11 +146,15 @@ class ChatService:
                     "session_id":
                     session_id,
 
-                    "recommendations":[],
+                    "recommendations": [],
 
-                    "error":None
+                    "error": None
 
                 }
+
+            # -----------------------------------
+            # STORE USER MESSAGE
+            # -----------------------------------
 
             SessionManager.add_message(
 
@@ -162,7 +166,7 @@ class ChatService:
 
             )
 
-            previous=(
+            previous = (
 
                 SessionManager
                 .get_filters(
@@ -173,7 +177,7 @@ class ChatService:
 
             )
 
-            remembered=(
+            remembered = (
 
                 SessionManager
                 .get_vendor_memory(
@@ -184,7 +188,11 @@ class ChatService:
 
             )
 
-            service_request=any(
+            # -----------------------------------
+            # SERVICE REQUEST FLOW
+            # -----------------------------------
+
+            service_request = any(
 
                 term in lower
 
@@ -204,7 +212,7 @@ class ChatService:
 
             ):
 
-                assistant=(
+                assistant = (
 
                     self._service_reply(
 
@@ -216,7 +224,7 @@ class ChatService:
 
                 return {
 
-                    "success":True,
+                    "success": True,
 
                     "message":
                     assistant,
@@ -224,7 +232,7 @@ class ChatService:
                     "session_id":
                     session_id,
 
-                    "recommendations":[
+                    "recommendations": [
 
                         self._vendor_card(
 
@@ -240,22 +248,78 @@ class ChatService:
 
                     ],
 
-                    "error":None
+                    "error": None
 
                 }
 
-            filters=(
+            # -----------------------------------
+            # STRUCTURED EXTRACTION
+            # -----------------------------------
 
-                QueryParser
-                .extract_filters(
+            try:
 
-                    user_message,
+                structured = (
 
-                    previous
+                    await self.ai_service
+                    .build_structured_response(
+
+                        user_message,
+
+                        previous
+
+                    )
+
+                )
+
+            except Exception:
+
+                structured = {
+
+                    "filters":
+
+                    previous or {},
+
+                    "intent":
+
+                    "vendor_recommendation",
+
+                    "missing_fields": []
+
+                }
+
+            filters = (
+
+                structured.get(
+
+                    "filters",
+
+                    {}
 
                 )
 
             )
+
+            intent = (
+
+                structured.get(
+
+                    "intent"
+
+                )
+
+            )
+
+            filters = {
+
+                k: v
+
+                for k, v
+
+                in filters.items()
+
+                if v is not None
+
+            }
 
             SessionManager.set_filters(
 
@@ -265,19 +329,11 @@ class ChatService:
 
             )
 
-            filters={
+            # -----------------------------------
+            # REFINEMENT FLOW
+            # -----------------------------------
 
-                k:v
-
-                for k,v
-
-                in filters.items()
-
-                if v is not None
-
-            }
-
-            refinement=any(
+            refinement = any(
 
                 word in lower
 
@@ -297,7 +353,7 @@ class ChatService:
 
             ):
 
-                filters={
+                filters = {
 
                     **previous,
 
@@ -305,49 +361,89 @@ class ChatService:
 
                 }
 
-            missing=(
+            # -----------------------------------
+            # MISSING FIELD DETECTION
+            # -----------------------------------
 
-                self._find_missing(
+            missing = (
 
-                    filters
+                structured.get(
+
+                    "missing_fields",
+
+                    []
 
                 )
 
             )
 
-            recommendations=[]
+            if missing:
+
+                missing = missing[0]
+
+            else:
+
+                missing = (
+
+                    self._find_missing(
+
+                        filters
+
+                    )
+
+                )
+
+            recommendations = []
+
+            # -----------------------------------
+            # FOLLOWUP FLOW
+            # -----------------------------------
 
             if missing:
 
-                assistant=(
+                assistant = (
 
-                    self.FOLLOWUP_QUESTIONS[
-                        missing
-                    ]
+                    self.FOLLOWUP_QUESTIONS.get(
+
+                        missing,
+
+                        "Please provide more details."
+
+                    )
 
                 )
 
             else:
 
-                intent=(
+                # -----------------------------------
+                # FALLBACK INTENT
+                # -----------------------------------
 
-                    IntentExtractor
-                    .extract(
+                if not intent:
 
-                        user_message
+                    intent = (
+
+                        IntentExtractor
+                        .extract(
+
+                            user_message
+
+                        )
+                        .get(
+
+                            "intent",
+
+                            "vendor_recommendation"
+
+                        )
 
                     )
-                    .get(
 
-                        "intent",
+                # -----------------------------------
+                # DATABASE CONTEXT
+                # -----------------------------------
 
-                        "vendor_recommendation"
-
-                    )
-
-                )
-
-                context=(
+                context = (
 
                     DataOrchestrator
                     .fetch_context(
@@ -362,7 +458,7 @@ class ChatService:
 
                 )
 
-                recommendations=(
+                recommendations = (
 
                     context
                     .get(
@@ -382,6 +478,22 @@ class ChatService:
 
                 )
 
+                print(
+
+                    "FOUND VENDORS:",
+
+                    len(
+
+                        recommendations
+
+                    )
+
+                )
+
+                # -----------------------------------
+                # RECOMMENDATION FLOW
+                # -----------------------------------
+
                 if recommendations:
 
                     SessionManager.set_vendor_memory(
@@ -392,7 +504,11 @@ class ChatService:
 
                     )
 
-                    assistant=(
+                    # IMPORTANT:
+                    # Safe static response
+                    # Avoids ModelScope 401 crash
+
+                    assistant = (
 
                         "Perfect. I found vendor options matching your requirements."
 
@@ -400,11 +516,15 @@ class ChatService:
 
                 else:
 
-                    assistant=(
+                    assistant = (
 
                         "Sorry, I couldn't find matching vendors."
 
                     )
+
+            # -----------------------------------
+            # STORE ASSISTANT MESSAGE
+            # -----------------------------------
 
             SessionManager.add_message(
 
@@ -416,9 +536,13 @@ class ChatService:
 
             )
 
+            # -----------------------------------
+            # FINAL RESPONSE
+            # -----------------------------------
+
             return {
 
-                "success":True,
+                "success": True,
 
                 "message":
                 assistant,
@@ -426,7 +550,7 @@ class ChatService:
                 "session_id":
                 session_id,
 
-                "recommendations":[
+                "recommendations": [
 
                     self._vendor_card(
 
@@ -442,7 +566,7 @@ class ChatService:
 
                 ],
 
-                "error":None
+                "error": None
 
             }
 
@@ -458,14 +582,14 @@ class ChatService:
 
             return {
 
-                "success":False,
+                "success": False,
 
-                "message":"",
+                "message": "",
 
                 "session_id":
                 session_id,
 
-                "recommendations":[],
+                "recommendations": [],
 
                 "error":
                 str(e)
@@ -475,6 +599,7 @@ class ChatService:
     def _service_reply(
 
         self,
+
         vendors
 
     ):
@@ -569,22 +694,6 @@ class ChatService:
 
         if not sections:
 
-            print(
-
-                "DEBUG ROOT:",
-
-                vendor.name
-
-            )
-
-            print(
-
-                "DEBUG TEAMS:",
-
-                vendor.managed_teams
-
-            )
-
             return (
 
                 "No service information available."
@@ -604,7 +713,7 @@ class ChatService:
             )
 
         )
-    
+
     def _find_missing(
 
         self,
@@ -613,7 +722,7 @@ class ChatService:
 
     ):
 
-        category=(
+        category = (
 
             filters.get(
 

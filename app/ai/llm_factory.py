@@ -14,7 +14,7 @@ class LLMFactory:
     @staticmethod
     def get_client():
 
-        provider=(
+        provider = (
 
             settings
             .AI_PROVIDER
@@ -22,7 +22,11 @@ class LLMFactory:
 
         )
 
-        if provider=="gemini":
+        # -----------------------------------
+        # GEMINI
+        # -----------------------------------
+
+        if provider == "gemini":
 
             return genai.Client(
 
@@ -32,7 +36,11 @@ class LLMFactory:
 
             )
 
-        if provider=="groq":
+        # -----------------------------------
+        # GROQ
+        # -----------------------------------
+
+        if provider == "groq":
 
             return Groq(
 
@@ -42,7 +50,27 @@ class LLMFactory:
 
             )
 
-        if provider=="modelscope":
+        # -----------------------------------
+        # OLLAMA
+        # -----------------------------------
+
+        if provider == "ollama":
+
+            return OpenAI(
+
+                base_url=
+
+                settings.OLLAMA_BASE_URL,
+
+                api_key="ollama"
+
+            )
+
+        # -----------------------------------
+        # MODELSCOPE
+        # -----------------------------------
+
+        if provider == "modelscope":
 
             return OpenAI(
 
@@ -52,7 +80,7 @@ class LLMFactory:
 
                 base_url=
 
-                "https://api-inference.modelscope.cn/v1"
+                "https://api-inference.modelscope.cn/v1/"
 
             )
 
@@ -64,6 +92,42 @@ class LLMFactory:
 
     @staticmethod
     def get_model():
+
+        provider = (
+
+            settings
+            .AI_PROVIDER
+            .lower()
+
+        )
+
+        # -----------------------------------
+        # OLLAMA
+        # -----------------------------------
+
+        if provider == "ollama":
+
+            return (
+
+                settings.AI_MODEL
+
+            )
+
+        # -----------------------------------
+        # MODELSCOPE
+        # -----------------------------------
+
+        if provider == "modelscope":
+
+            return (
+
+                "Qwen/Qwen2.5-7B-Instruct"
+
+            )
+
+        # -----------------------------------
+        # DEFAULT
+        # -----------------------------------
 
         return (
 

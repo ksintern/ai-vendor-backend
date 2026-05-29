@@ -1,8 +1,12 @@
 class ContextBuilder:
 
-    MAX_VENDORS = 5
+    MAX_VENDORS=5
 
-    MAX_CATEGORIES = 10
+    MAX_CATEGORIES=10
+
+    MAX_HISTORY=5
+
+    MAX_VENDOR_MEMORY=3
 
     @staticmethod
     def _safe(
@@ -102,7 +106,7 @@ class ContextBuilder:
 
                 )
 
-                if (
+                if(
 
                     service_name
 
@@ -118,7 +122,7 @@ class ContextBuilder:
 
                     )
 
-            if (
+            if(
 
                 category_name
 
@@ -278,9 +282,69 @@ class ContextBuilder:
         }
 
     @staticmethod
+    def _trim_history(
+
+        history
+
+    ):
+
+        if not history:
+
+            return []
+
+        return history[
+
+            -ContextBuilder.MAX_HISTORY:
+
+        ]
+
+    @staticmethod
+    def _vendor_memory(
+
+        remembered
+
+    ):
+
+        if not remembered:
+
+            return []
+
+        return [
+
+            ContextBuilder._safe(
+
+                getattr(
+
+                    vendor,
+
+                    "name",
+
+                    None
+
+                )
+
+            )
+
+            for vendor
+
+            in remembered[
+
+                :ContextBuilder.MAX_VENDOR_MEMORY
+
+            ]
+
+        ]
+
+    @staticmethod
     def build(
 
-        context:dict
+        context:dict,
+
+        history=None,
+
+        filters=None,
+
+        vendor_memory=None
 
     ):
 
@@ -329,7 +393,6 @@ class ContextBuilder:
         categories=(
 
             context
-
             .get(
 
                 "context",
@@ -337,7 +400,6 @@ class ContextBuilder:
                 {}
 
             )
-
             .get(
 
                 "categories",
@@ -374,6 +436,26 @@ class ContextBuilder:
 
         ]
 
+        active_filters={
+
+            k:v
+
+            for k,v
+
+            in (
+
+                filters
+
+                or
+
+                {}
+
+            ).items()
+
+            if v is not None
+
+        }
+
         llm_context={
 
             "STRICT_DB_RESULTS":
@@ -383,6 +465,26 @@ class ContextBuilder:
             "AVAILABLE_CATEGORIES":
 
             category_names,
+
+            "ACTIVE_FILTERS":
+
+            active_filters,
+
+            "RECENT_HISTORY":
+
+            ContextBuilder._trim_history(
+
+                history
+
+            ),
+
+            "VENDOR_MEMORY":
+
+            ContextBuilder._vendor_memory(
+
+                vendor_memory
+
+            ),
 
             "RULES":[
 

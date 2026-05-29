@@ -1,8 +1,14 @@
 import asyncio
 import hashlib
+import json
 import logging
 import time
-from typing import Any
+
+from typing import (
+    Any,
+    Dict,
+    Optional
+)
 
 from app.ai.cache_handler import (
     CacheHandler
@@ -24,12 +30,28 @@ from app.ai.prompt_loader import (
     PromptLoader
 )
 
+from app.ai.prompt_chain import (
+    PromptChain
+)
+
+from app.ai.structured_response import (
+    StructuredResponseBuilder
+)
+
+from app.ai.query_parser import (
+    QueryParser
+)
+
+from app.ai.intent_extractor import (
+    IntentExtractor
+)
+
 from app.core.config import (
     settings
 )
 
 
-logger=logging.getLogger(
+logger = logging.getLogger(
 
     __name__
 
@@ -38,15 +60,19 @@ logger=logging.getLogger(
 
 class AIService:
 
-    CACHE_ENABLED=True
+    CACHE_ENABLED = True
 
-    MAX_RETRIES=2
+    # -----------------------------------
+    # OLLAMA SAFE SETTINGS
+    # -----------------------------------
 
-    REQUEST_TIMEOUT=30
+    MAX_RETRIES = 1
 
-    TEMPERATURE=0.15
+    REQUEST_TIMEOUT = 180
 
-    MAX_OUTPUT_TOKENS=120
+    TEMPERATURE = 0
+
+    MAX_OUTPUT_TOKENS = 20
 
     def __init__(
 
@@ -54,27 +80,25 @@ class AIService:
 
     ):
 
-        self.client=(
+        self.client = (
 
-            LLMFactory
-            .get_client()
-
-        )
-
-        self.model=(
-
-            LLMFactory
-            .get_model()
+            LLMFactory.get_client()
 
         )
 
-        self.cache=(
+        self.model = (
+
+            LLMFactory.get_model()
+
+        )
+
+        self.cache = (
 
             CacheHandler()
 
         )
 
-        self.provider=(
+        self.provider = (
 
             settings
             .AI_PROVIDER
@@ -86,11 +110,11 @@ class AIService:
 
         self,
 
-        prompt:str
+        prompt: str
 
     ):
 
-        start=time.time()
+        start = time.time()
 
         try:
 
@@ -100,7 +124,7 @@ class AIService:
 
             )
 
-            cache_key=(
+            cache_key = (
 
                 hashlib.md5(
 
@@ -118,9 +142,13 @@ class AIService:
 
             )
 
+            # -----------------------------------
+            # CACHE
+            # -----------------------------------
+
             if self.CACHE_ENABLED:
 
-                cached=(
+                cached = (
 
                     await self.cache.get(
 
@@ -134,17 +162,21 @@ class AIService:
 
                     return cached
 
-            response=None
+            response = None
+
+            # -----------------------------------
+            # RETRIES
+            # -----------------------------------
 
             for attempt in range(
 
-                self.MAX_RETRIES+1
+                self.MAX_RETRIES + 1
 
             ):
 
                 try:
 
-                    response=await(
+                    response = await (
 
                         asyncio.wait_for(
 
@@ -166,9 +198,15 @@ class AIService:
 
                     break
 
-                except Exception:
+                except Exception as e:
 
-                    if(
+                    logger.warning(
+
+                        f"AI retry {attempt + 1} failed: {str(e)}"
+
+                    )
+
+                    if (
 
                         attempt
 
@@ -194,7 +232,7 @@ class AIService:
 
                 )
 
-            latency=round(
+            latency = round(
 
                 (
 
@@ -204,23 +242,23 @@ class AIService:
 
                     start
 
-                )*1000,
+                ) * 1000,
 
                 2
 
             )
 
-            result={
+            result = {
 
-                "success":True,
+                "success": True,
 
                 "response":
 
                 response.strip(),
 
-                "error":None,
+                "error": None,
 
-                "metadata":{
+                "metadata": {
 
                     "provider":
 
@@ -237,6 +275,10 @@ class AIService:
                 }
 
             }
+
+            # -----------------------------------
+            # CACHE STORE
+            # -----------------------------------
 
             if self.CACHE_ENABLED:
 
@@ -258,7 +300,7 @@ class AIService:
 
             )
 
-            return(
+            return (
 
                 FallbackHandler
                 .get_fallback_response()
@@ -273,13 +315,13 @@ class AIService:
 
             )
 
-            return{
+            return {
 
-                "success":False,
+                "success": False,
 
-                "response":None,
+                "response": None,
 
-                "error":str(
+                "error": str(
 
                     e
 
@@ -287,31 +329,387 @@ class AIService:
 
             }
 
+    async def build_structured_response(
+
+        self,
+
+        user_message: str,
+
+        previous: Optional[Dict] = None
+
+    ):
+
+        # -----------------------------------
+        # PARSER FILTERS
+        # -----------------------------------
+
+        parser_filters = dict(
+
+            QueryParser.extract_filters(
+
+                user_message,
+
+                previous
+
+            )
+
+        )
+
+        # -----------------------------------
+        # PROMPT CHAIN
+        # -----------------------------------
+
+        chain = (
+
+            PromptChain.build(
+
+                user_message,
+
+                previous or {}
+
+            )
+
+        )
+
+        # -----------------------------------
+        # LLM FILTERS
+        # -----------------------------------
+
+        llm_filters = {}
+
+        for step in chain:
+
+            if (
+
+                step["stage"]
+
+                ==
+
+                "filter_extraction"
+
+            ):
+
+                llm_filters = await (
+
+                    self._extract_llm_filters(
+
+                        user_message
+
+                    )
+
+                )
+
+                break
+
+        # -----------------------------------
+        # INTENT
+        # -----------------------------------
+
+        intent = (
+
+            IntentExtractor.extract(
+
+                user_message
+
+            )
+
+            .get(
+
+                "intent",
+
+                "vendor_recommendation"
+
+            )
+
+        )
+
+        # -----------------------------------
+        # CONFIDENCE
+        # -----------------------------------
+
+        confidence = 0.95
+
+        if llm_filters:
+
+            confidence = 0.98
+
+        # -----------------------------------
+        # STRUCTURED RESPONSE
+        # -----------------------------------
+
+        structured = (
+
+            StructuredResponseBuilder.build(
+
+                parser_filters=
+
+                parser_filters,
+
+                llm_filters=
+
+                llm_filters,
+
+                intent=
+
+                intent,
+
+                confidence=
+
+                confidence
+
+            )
+
+        )
+
+        structured[
+
+            "prompt_chain"
+
+        ] = [
+
+            step["stage"]
+
+            for step
+
+            in chain
+
+        ]
+
+        return structured
+
+    async def build_recommendation_response(
+
+        self,
+
+        user_message: str,
+
+        recommendations_exist: bool,
+
+        filters: dict
+
+    ):
+
+        # -----------------------------------
+        # NO VENDORS
+        # -----------------------------------
+
+        if not recommendations_exist:
+
+            return (
+
+                "Sorry, I couldn't find matching vendors."
+
+            )
+
+        try:
+
+            template = (
+
+                PromptLoader.get_prompt(
+
+                    "recommendation_response"
+
+                )
+
+            )
+
+            category = (
+
+                filters.get(
+
+                    "category"
+
+                )
+
+                or
+
+                "vendor"
+
+            )
+
+            pricing = (
+
+                filters.get(
+
+                    "pricing_preference"
+
+                )
+
+                or
+
+                ""
+
+            )
+
+            city = (
+
+                filters.get(
+
+                    "city"
+
+                )
+
+                or
+
+                ""
+
+            )
+
+            prompt = (
+
+                f"{template}\n\n"
+
+                f"User Query:\n"
+
+                f"{user_message}\n\n"
+
+                f"Category:{category}\n"
+
+                f"Pricing:{pricing}\n"
+
+                f"City:{city}"
+
+            )
+
+            result = await (
+
+                self.execute_prompt(
+
+                    prompt
+
+                )
+
+            )
+
+            if result.get(
+
+                "success"
+
+            ):
+
+                return (
+
+                    result.get(
+
+                        "response"
+
+                    )
+
+                )
+
+        except Exception:
+
+            pass
+
+        # -----------------------------------
+        # SAFE FALLBACK
+        # -----------------------------------
+
+        return (
+
+            "Perfect. I found vendor options matching your requirements."
+
+        )
+
+    async def _extract_llm_filters(
+
+        self,
+
+        user_message: str
+
+    ):
+
+        try:
+
+            template = (
+
+                PromptLoader.get_prompt(
+
+                    "filter_extraction"
+
+                )
+
+            )
+
+            prompt = (
+
+                f"{template}\n\n"
+
+                f"User:\n"
+
+                f"{user_message}"
+
+            )
+
+            result = await (
+
+                self.execute_prompt(
+
+                    prompt
+
+                )
+
+            )
+
+            if not result.get(
+
+                "success"
+
+            ):
+
+                return {}
+
+            response = result["response"]
+
+            # -----------------------------------
+            # JSON PARSE
+            # -----------------------------------
+
+            try:
+
+                parsed = json.loads(
+
+                    response
+
+                )
+
+                return parsed
+
+            except Exception:
+
+                logger.warning(
+
+                    "Invalid structured JSON"
+
+                )
+
+                return {}
+
+        except Exception:
+
+            return {}
+
     def _generate(
 
         self,
 
-        prompt:str
+        prompt: str
 
     ):
 
-        if(
+        # -----------------------------------
+        # GROQ / OLLAMA / MODELSCOPE
+        # -----------------------------------
 
-            self.provider
+        if self.provider in [
 
-            in
+            "groq",
+            "ollama",
+            "modelscope"
 
-            [
+        ]:
 
-                "groq",
-
-                "modelscope"
-
-            ]
-
-        ):
-
-            response=(
+            response = (
 
                 self.client
                 .chat
@@ -326,7 +724,22 @@ class AIService:
 
                         {
 
-                            "role":"user",
+                            "role": "system",
+
+                            "content":
+
+                            (
+                                "You are an AI vendor "
+                                "discovery assistant. "
+                                "Return concise and "
+                                "structured responses."
+                            )
+
+                        },
+
+                        {
+
+                            "role": "user",
 
                             "content":
 
@@ -340,6 +753,8 @@ class AIService:
 
                     self.TEMPERATURE,
 
+                    stream=False,
+
                     max_tokens=
 
                     self.MAX_OUTPUT_TOKENS
@@ -348,7 +763,7 @@ class AIService:
 
             )
 
-            return(
+            return (
 
                 response
                 .choices[0]
@@ -356,7 +771,11 @@ class AIService:
 
             )
 
-        elif(
+        # -----------------------------------
+        # GEMINI
+        # -----------------------------------
+
+        elif (
 
             self.provider
 
@@ -366,13 +785,13 @@ class AIService:
 
         ):
 
-            gemini_client:Any=(
+            gemini_client: Any = (
 
                 self.client
 
             )
 
-            response=(
+            response = (
 
                 gemini_client
                 .models
@@ -390,53 +809,18 @@ class AIService:
 
             )
 
-            return(
+            return (
 
                 response.text
 
             )
 
+        # -----------------------------------
+        # INVALID PROVIDER
+        # -----------------------------------
+
         raise RuntimeError(
 
             f"Unsupported provider {self.provider}"
-
-        )
-
-    async def execute_prompt_file(
-
-        self,
-
-        prompt_file:str,
-
-        user_input:str
-
-    ):
-
-        template=(
-
-            PromptLoader
-            .load_prompt(
-
-                prompt_file
-
-            )
-
-        )
-
-        prompt=(
-
-            f"{template}\n\n"
-
-            f"{user_input}"
-
-        )
-
-        return await(
-
-            self.execute_prompt(
-
-                prompt
-
-            )
 
         )

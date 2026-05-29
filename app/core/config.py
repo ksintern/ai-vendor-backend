@@ -17,59 +17,66 @@ class Settings(
     # DATABASE
     # -----------------------------
 
-    DATABASE_URL:str
+    DATABASE_URL: str
 
 
     # -----------------------------
     # JWT
     # -----------------------------
 
-    SECRET_KEY:str
+    SECRET_KEY: str
 
-    ALGORITHM:str="HS256"
+    ALGORITHM: str = "HS256"
 
-    ACCESS_TOKEN_EXPIRE_MINUTES:int=15
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 15
 
-    REFRESH_TOKEN_EXPIRE_DAYS:int=7
+    REFRESH_TOKEN_EXPIRE_DAYS: int = 7
 
 
     # -----------------------------
     # GEMINI
     # -----------------------------
 
-    GEMINI_API_KEY:str|None=None
+    GEMINI_API_KEY: str | None = None
 
 
     # -----------------------------
     # GROQ
     # -----------------------------
 
-    GROQ_API_KEY:str|None=None
+    GROQ_API_KEY: str | None = None
 
 
     # -----------------------------
     # MODELSCOPE
     # -----------------------------
 
-    MODELSCOPE_API_KEY:str|None=None
+    MODELSCOPE_API_KEY: str | None = None
+
+
+    # -----------------------------
+    # OLLAMA
+    # -----------------------------
+
+    OLLAMA_BASE_URL: str = "http://localhost:11434/v1"
 
 
     # -----------------------------
     # AI
     # -----------------------------
 
-    AI_PROVIDER:str="groq"
+    AI_PROVIDER: str = "ollama"
 
-    AI_MODEL:str="llama-3.1-8b-instant"
+    AI_MODEL: str = "qwen2.5:7b"
 
-    AI_TIMEOUT:int=45
+    AI_TIMEOUT: int = 45
 
 
     # -----------------------------
     # ENV
     # -----------------------------
 
-    model_config=(
+    model_config = (
 
         SettingsConfigDict(
 
@@ -82,24 +89,8 @@ class Settings(
     )
 
 
-settings=Settings()  # type: ignore
+settings = Settings()  # type: ignore
 
-
-print(
-
-    "GROQ KEY:",
-
-    settings.GROQ_API_KEY
-
-)
-
-print(
-
-    "MODELSCOPE KEY:",
-
-    settings.MODELSCOPE_API_KEY
-
-)
 
 print(
 
@@ -114,5 +105,13 @@ print(
     "AI MODEL:",
 
     settings.AI_MODEL
+
+)
+
+print(
+
+    "OLLAMA URL:",
+
+    settings.OLLAMA_BASE_URL
 
 )

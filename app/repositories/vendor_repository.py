@@ -509,11 +509,23 @@ def search_vendors(
 
     if category:
 
-        search=search.filter(
+        category_pattern = f"%{category}%"
 
-            CategoryVendor.name.ilike(
+        search = search.filter(
 
-                f"%{category}%"
+            or_(
+
+                CategoryVendor.name.ilike(
+
+                    category_pattern
+
+                ),
+
+                ServiceAlias.service_name.ilike(
+
+                    category_pattern
+
+                )
 
             )
 
@@ -678,6 +690,11 @@ def search_vendors_ai(
 
             ],
 
+            "luxury":[
+                "premium",
+                "luxury"
+            ],
+
             "budget":[
 
                 "budget",
@@ -686,6 +703,18 @@ def search_vendors_ai(
 
                 "affordable"
 
+            ],
+
+            "cheap":[
+                "budget",
+                "cheap",
+                "affordable"
+            ],
+
+            "affordable":[
+                "budget",
+                "cheap",
+                "affordable"
             ]
 
         }

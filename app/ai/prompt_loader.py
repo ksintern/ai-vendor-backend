@@ -1,44 +1,136 @@
-from pathlib import Path
+from typing import Dict
 
+from app.ai.prompts.ai_prompts import (
 
-BASE_DIR = (
+    VENDOR_DISCOVERY_PROMPT,
 
-    Path(__file__)
+    FILTER_EXTRACTION_PROMPT,
 
-    .resolve()
+    FOLLOWUP_RESPONSE_PROMPT,
 
-    .parent
+    RECOMMENDATION_RESPONSE_PROMPT
 
 )
 
-PROMPTS_DIR = (
+from app.ai.prompts.model_prompts import (
 
-    BASE_DIR
+    SQLALCHEMY_MODEL_PROMPT,
 
-    / "prompts"
+    POSTGRES_TABLE_PROMPT,
+
+    RELATIONSHIP_MAPPING_PROMPT,
+
+    QUERY_OPTIMIZATION_PROMPT
+
+)
+
+from app.ai.prompts.workflow_prompts import (
+
+    CURSOR_AI_ENGINEERING_PROMPT,
+
+    BACKEND_WORKFLOW_PROMPT,
+
+    FRONTEND_WORKFLOW_PROMPT,
+
+    DATABASE_WORKFLOW_PROMPT,
+
+    AI_WORKFLOW_PROMPT,
+
+    PROMPT_ENGINEERING_STRATEGY_PROMPT,
+
+    AI_VALIDATION_PROMPT
 
 )
 
 
 class PromptLoader:
 
-    _cache = {}
+    _cache: Dict[str, str] = {}
 
+    _prompt_registry = {
+
+        # Vendor AI
+
+        "vendor_discovery":
+
+        VENDOR_DISCOVERY_PROMPT,
+
+        "filter_extraction":
+
+        FILTER_EXTRACTION_PROMPT,
+
+        "followup_response":
+
+        FOLLOWUP_RESPONSE_PROMPT,
+
+        "recommendation_response":
+
+        RECOMMENDATION_RESPONSE_PROMPT,
+
+        # Database
+
+        "sqlalchemy_model":
+
+        SQLALCHEMY_MODEL_PROMPT,
+
+        "postgres_table":
+
+        POSTGRES_TABLE_PROMPT,
+
+        "relationship_mapping":
+
+        RELATIONSHIP_MAPPING_PROMPT,
+
+        "query_optimization":
+
+        QUERY_OPTIMIZATION_PROMPT,
+
+        # Engineering Workflow
+
+        "cursor_engineering":
+
+        CURSOR_AI_ENGINEERING_PROMPT,
+
+        "backend_workflow":
+
+        BACKEND_WORKFLOW_PROMPT,
+
+        "frontend_workflow":
+
+        FRONTEND_WORKFLOW_PROMPT,
+
+        "database_workflow":
+
+        DATABASE_WORKFLOW_PROMPT,
+
+        "ai_workflow":
+
+        AI_WORKFLOW_PROMPT,
+
+        "prompt_strategy":
+
+        PROMPT_ENGINEERING_STRATEGY_PROMPT,
+
+        "validation":
+
+        AI_VALIDATION_PROMPT
+
+    }
 
     @classmethod
-    def load_prompt(
+    def get_prompt(
 
         cls,
 
-        filename: str
+        name: str
 
     ) -> str:
 
-        cached = (
+        cached=(
 
             cls._cache.get(
 
-                filename
+                name
 
             )
 
@@ -48,40 +140,72 @@ class PromptLoader:
 
             return cached
 
-        filepath = (
+        prompt=(
 
-            PROMPTS_DIR
+            cls._prompt_registry.get(
 
-            / filename
-
-        )
-
-        if not filepath.exists():
-
-            raise FileNotFoundError(
-
-                f"Prompt file not found: {filename}"
-
-            )
-
-        content = (
-
-            filepath.read_text(
-
-                encoding="utf-8"
+                name
 
             )
 
         )
+
+        if not prompt:
+
+            available=(
+
+                ", ".join(
+
+                    sorted(
+
+                        cls._prompt_registry.keys()
+
+                    )
+
+                )
+
+            )
+
+            raise ValueError(
+
+                f"Prompt '{name}' not found. "
+
+                f"Available prompts: {available}"
+
+            )
 
         cls._cache[
 
-            filename
+            name
 
-        ] = content
+        ]=prompt
 
-        return content
+        return prompt
 
+    @classmethod
+    def register_prompt(
+
+        cls,
+
+        name:str,
+
+        content:str
+
+    ):
+
+        cls._prompt_registry[
+
+            name
+
+        ]=content
+
+        cls._cache.pop(
+
+            name,
+
+            None
+
+        )
 
     @classmethod
     def clear_cache(
@@ -91,3 +215,16 @@ class PromptLoader:
     ):
 
         cls._cache.clear()
+
+    @classmethod
+    def available_prompts(
+
+        cls
+
+    ):
+
+        return sorted(
+
+            cls._prompt_registry.keys()
+
+        )
