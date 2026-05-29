@@ -1,20 +1,15 @@
 import re
 
 from typing import (
-
     List,
     Optional,
     TypedDict
-
 )
 
 
 class QueryFilters(
-
     TypedDict,
-
     total=False
-
 ):
 
     category: Optional[str]
@@ -43,72 +38,82 @@ class QueryFilters(
 
     service_request: bool
 
+    vendor_quality: Optional[str]
+
 
 class QueryParser:
 
     CATEGORY_PATTERNS = {
 
-        "catering":[
-
+        "catering": [
             "catering",
             "caterer",
             "food"
-
         ],
 
-        "photography":[
-
+        "photography": [
             "photography",
             "photographer",
             "photographers"
-
         ],
 
-        "decoration":[
-
+        "decoration": [
             "decoration",
             "decor",
             "decorator"
-
         ],
 
-        "venue":[
-
+        "venue": [
             "venue",
             "banquet",
             "hall"
-
         ],
 
-        "music":[
-
+        "music": [
             "music",
             "dj",
             "band"
+        ],
 
+        "planner": [
+            "planner",
+            "event planner",
+            "wedding planner"
+        ],
+
+        "makeup": [
+            "makeup",
+            "makeup artist",
+            "bridal makeup"
         ]
-
     }
 
     CITY_MAP = {
 
-        "delhi":"delhi",
+        "delhi": "delhi",
 
-        "new delhi":"delhi",
+        "new delhi": "delhi",
 
-        "mumbai":"mumbai",
+        "delhi ncr": "delhi",
 
-        "bangalore":"bangalore",
+        "ncr": "delhi",
 
-        "noida":"noida",
+        "mumbai": "mumbai",
 
-        "gurgaon":"gurgaon",
+        "bangalore": "bangalore",
 
-        "greater noida":"greater noida"
+        "bengaluru": "bangalore",
 
+        "noida": "noida",
+
+        "greater noida": "greater noida",
+
+        "gurgaon": "gurgaon",
+
+        "gurugram": "gurgaon"
     }
 
-    CUISINES={
+    CUISINES = {
 
         "north indian",
 
@@ -121,10 +126,9 @@ class QueryParser:
         "italian",
 
         "mexican"
-
     }
 
-    EVENTS={
+    EVENTS = {
 
         "wedding",
 
@@ -136,11 +140,22 @@ class QueryParser:
 
         "conference",
 
-        "party"
+        "party",
 
+        "reception",
+
+        "anniversary",
+
+        "baby shower",
+
+        "haldi",
+
+        "mehendi",
+
+        "sangeet"
     }
 
-    CHEAPER_TERMS={
+    CHEAPER_TERMS = {
 
         "cheap",
 
@@ -148,19 +163,60 @@ class QueryParser:
 
         "affordable",
 
-        "budget"
+        "budget",
 
+        "economical",
+
+        "budget friendly",
+
+        "cost effective",
+
+        "low cost"
     }
 
-    PREMIUM_TERMS={
+    PREMIUM_TERMS = {
 
         "premium",
 
-        "luxury"
+        "luxury",
 
+        "elite",
+
+        "exclusive",
+
+        "high end",
+
+        "high-end"
     }
 
-    SERVICE_TERMS={
+    QUALITY_TERMS = {
+
+        "best",
+
+        "top",
+
+        "top rated",
+
+        "highest rated",
+
+        "highly rated",
+
+        "high ratings",
+
+        "high rating",
+
+        "good ratings",
+
+        "good rating",
+
+        "trusted",
+
+        "experienced",
+
+        "recommended"
+    }
+
+    SERVICE_TERMS = {
 
         "service",
 
@@ -172,11 +228,12 @@ class QueryParser:
 
         "offering",
 
-        "offer"
+        "offer",
 
+        "facilities"
     }
 
-    COMPARISON_TERMS={
+    COMPARISON_TERMS = {
 
         "compare",
 
@@ -186,399 +243,311 @@ class QueryParser:
 
         "vs",
 
-        "better"
+        "better",
 
+        "difference"
     }
 
     @staticmethod
     def extract_filters(
+        query: str,
+        previous: Optional[dict] = None
+    ) -> QueryFilters:
 
-        query:str,
-
-        previous:dict|None=None
-
-    )->QueryFilters:
-
-        filters=dict(
-
+        filters = dict(
             previous or {}
-
         )
 
-        query_lower=(
-
+        query_lower = (
             query
             .lower()
             .strip()
-
         )
 
-        tokens=set(
-
+        tokens = set(
             re.findall(
-
                 r"\w+",
-
                 query_lower
-
             )
-
         )
 
-        category=(
-
+        category = (
             QueryParser
             ._extract_category(
-
                 query_lower
-
             )
-
         )
 
         if category:
+            filters["category"] = category
 
-            filters["category"]=category
-
-        city=(
-
+        city = (
             QueryParser
             ._extract_city(
-
                 query_lower
-
             )
-
         )
 
         if city:
+            filters["city"] = city
 
-            filters["city"]=city
-
-        budget=(
-
+        budget = (
             QueryParser
             ._extract_budget(
-
                 query_lower
-
             )
-
         )
 
         if budget:
+            filters["budget"] = budget
 
-            filters["budget"]=budget
-
-        guests=(
-
+        guests = (
             QueryParser
             ._extract_guest_count(
-
                 query_lower,
-
                 filters
-
             )
-
         )
 
         if guests:
+            filters["guest_count"] = guests
 
-            filters["guest_count"]=guests
-
-        cuisine=next(
-
+        cuisine = next(
             (
-
                 item
-
                 for item
-
                 in QueryParser.CUISINES
-
                 if item in query_lower
-
             ),
-
             None
-
         )
 
         if cuisine:
+            filters["cuisine"] = cuisine
 
-            filters["cuisine"]=cuisine
-
-        event=next(
-
+        event = next(
             (
-
                 item
-
                 for item
-
                 in QueryParser.EVENTS
-
                 if item in query_lower
-
             ),
-
             None
-
         )
 
         if event:
-
-            filters["event_type"]=event
+            filters["event_type"] = event
 
         if any(
-
             term in query_lower
-
             for term
-
             in QueryParser.SERVICE_TERMS
-
         ):
-
-            filters["service_request"]=True
+            filters["service_request"] = True
 
         if any(
-
-            term in tokens
-
+            term in query_lower
             for term
-
             in QueryParser.COMPARISON_TERMS
-
         ):
-
-            filters["comparison_request"]=True
+            filters["comparison_request"] = True
 
         if any(
-
             term in query_lower
-
             for term
-
             in QueryParser.CHEAPER_TERMS
-
         ):
-
-            filters[
-
-                "pricing_preference"
-
-            ]="budget"
+            filters["pricing_preference"] = "budget"
 
         if any(
-
             term in query_lower
-
             for term
-
             in QueryParser.PREMIUM_TERMS
-
         ):
+            filters["pricing_preference"] = "premium"
 
-            filters[
+        if any(
+            term in query_lower
+            for term
+            in QueryParser.QUALITY_TERMS
+        ):
+            filters["vendor_quality"] = "high"
 
-                "pricing_preference"
+        rating = QueryParser._extract_rating(
+            query_lower
+        )
 
-            ]="premium"
+        if rating:
+            filters["rating"] = rating
 
         return filters
 
     @staticmethod
     def _extract_city(
-
-        query:str
-
+        query: str
     ):
 
-        for city,value in (
-
+        for city, value in (
             QueryParser
             .CITY_MAP
             .items()
-
         ):
 
             if city in query:
-
                 return value
 
         return None
 
     @staticmethod
     def _extract_category(
-
-        query:str
-
+        query: str
     ):
 
-        for category,terms in (
-
+        for category, terms in (
             QueryParser
             .CATEGORY_PATTERNS
             .items()
-
         ):
 
             if any(
-
                 term in query
-
                 for term in terms
-
             ):
-
                 return category
 
         return None
 
     @staticmethod
     def _extract_budget(
-
-        query:str
-
+        query: str
     ):
 
-        lakh=re.search(
-
+        lakh = re.search(
             r"(\d+(?:\.\d+)?)\s*lakh",
-
             query
-
         )
 
         if lakh:
 
             return int(
-
                 float(
-
                     lakh.group(1)
-
-                )
-
-                *100000
-
+                ) * 100000
             )
 
-        k_format=re.search(
-
-            r"(\d+)\s*k",
-
+        thousand = re.search(
+            r"(\d+(?:\.\d+)?)\s*thousand",
             query
+        )
 
+        if thousand:
+
+            return int(
+                float(
+                    thousand.group(1)
+                ) * 1000
+            )
+
+        k_format = re.search(
+            r"(\d+(?:\.\d+)?)\s*k",
+            query
         )
 
         if k_format:
 
-            return (
-
-                int(
-
+            return int(
+                float(
                     k_format.group(1)
-
-                )
-
-                *1000
-
+                ) * 1000
             )
 
-        numbers=re.findall(
-
-            r"\d{4,7}",
-
+        numbers = re.findall(
+            r"\d{4,8}",
             query
-
         )
 
         for number in numbers:
 
-            value=int(number)
+            value = int(number)
 
-            if value>1000:
-
+            if value > 1000:
                 return value
 
         return None
 
     @staticmethod
-    def _extract_guest_count(
-
-        query:str,
-
-        filters:dict
-
+    def _extract_rating(
+        query: str
     ):
 
-        explicit=re.search(
-
-            r"(\d+)\s*(guest|guests|people|persons)",
-
+        rating_match = re.search(
+            r"(\d(?:\.\d)?)\s*(star|stars)",
             query
+        )
 
+        if rating_match:
+
+            return float(
+                rating_match.group(1)
+            )
+
+        if any(
+
+            phrase in query
+
+            for phrase in [
+
+                "top rated",
+
+                "highest rated",
+
+                "highly rated",
+
+                "high ratings",
+
+                "best rated"
+
+            ]
+
+        ):
+
+            return 4.0
+
+        return None
+
+    @staticmethod
+    def _extract_guest_count(
+        query: str,
+        filters: dict
+    ):
+
+        explicit = re.search(
+            r"(\d+)\s*(guest|guests|people|persons|attendees)",
+            query
         )
 
         if explicit:
 
             return int(
-
                 explicit.group(1)
-
             )
 
-        numbers=re.findall(
-
-            r"\d+",
-
-            query
-
-        )
-
-        budget=(
-
-            filters.get(
-
-                "budget"
-
-            )
-
-        )
-
-        for number in numbers:
-
-            value=int(number)
-
-            if (
-
-                1
-
-                <=
-
-                value
-
-                <=
-
-                1000
-
-            ):
-
-                if (
-
-                    budget
-
-                    and
-
-                    value==budget
-
-                ):
-
-                    continue
-
-                return value
+    # ----------------------------------
+    # SAFE MODE
+    # ----------------------------------
+    # Do not guess guest count from
+    # standalone numbers because:
+    #
+    # "2 lakh"
+    # "50k"
+    # "1.5 lakh"
+    #
+    # get incorrectly interpreted
+    # as guest counts.
+    #
+    # Guest count should only be
+    # extracted when guest-related
+    # words are present.
+    # ----------------------------------
 
         return None

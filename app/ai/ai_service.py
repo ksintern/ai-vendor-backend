@@ -50,6 +50,17 @@ from app.core.config import (
     settings
 )
 
+from app.ai.query_preprocessor import (
+    QueryPreprocessor
+)
+
+from app.ai.query_validator import (
+    QueryValidator
+)
+
+from app.ai.query_transformer import (
+    QueryTransformer
+)
 
 logger = logging.getLogger(
 
@@ -330,29 +341,30 @@ class AIService:
             }
 
     async def build_structured_response(
-
         self,
-
         user_message: str,
-
         previous: Optional[Dict] = None
-
     ):
+
+        # -----------------------------------
+        # PREPROCESS QUERY
+        # -----------------------------------
+
+        normalized_query = (
+            QueryPreprocessor.preprocess(
+                user_message
+            )
+        )
 
         # -----------------------------------
         # PARSER FILTERS
         # -----------------------------------
 
         parser_filters = dict(
-
             QueryParser.extract_filters(
-
-                user_message,
-
+                normalized_query,
                 previous
-
             )
-
         )
 
         # -----------------------------------
@@ -360,15 +372,10 @@ class AIService:
         # -----------------------------------
 
         chain = (
-
             PromptChain.build(
-
-                user_message,
-
+                normalized_query,
                 previous or {}
-
             )
-
         )
 
         # -----------------------------------
@@ -380,23 +387,15 @@ class AIService:
         for step in chain:
 
             if (
-
                 step["stage"]
-
                 ==
-
                 "filter_extraction"
-
             ):
 
                 llm_filters = await (
-
                     self._extract_llm_filters(
-
-                        user_message
-
+                        normalized_query
                     )
-
                 )
 
                 break
@@ -405,74 +404,122 @@ class AIService:
         # INTENT
         # -----------------------------------
 
-        intent = (
-
+        intent_data = (
             IntentExtractor.extract(
-
-                user_message
-
+                normalized_query
             )
+        )
 
-            .get(
-
+        intent = (
+            intent_data.get(
                 "intent",
-
                 "vendor_recommendation"
-
             )
+        )
 
+        # -----------------------------------
+        # MERGE FILTERS
+        # -----------------------------------
+
+        final_filters = {
+            **parser_filters
+        }
+
+        if llm_filters:
+
+            for key, value in llm_filters.items():
+
+                if (
+                    value is not None
+                    and
+                    value != ""
+                ):
+
+                    final_filters[key] = value
+
+        # -----------------------------------
+        # VALIDATION
+        # -----------------------------------
+
+        validation = (
+            QueryValidator.validate(
+                intent,
+                final_filters
+            )
+        )
+
+        # -----------------------------------
+        # SEARCH PAYLOAD
+        # -----------------------------------
+
+        search_payload = (
+            QueryTransformer.build_search_payload(
+                final_filters
+            )
         )
 
         # -----------------------------------
         # CONFIDENCE
         # -----------------------------------
 
-        confidence = 0.95
+        confidence = 0.90
 
         if llm_filters:
-
             confidence = 0.98
+
+        if validation["is_valid"]:
+            confidence += 0.01
+
+        confidence = min(
+            confidence,
+            0.99
+        )
 
         # -----------------------------------
         # STRUCTURED RESPONSE
         # -----------------------------------
 
         structured = (
-
             StructuredResponseBuilder.build(
-
                 parser_filters=
-
                 parser_filters,
 
                 llm_filters=
-
                 llm_filters,
 
                 intent=
-
                 intent,
 
                 confidence=
-
                 confidence
-
             )
-
         )
 
-        structured[
+        # -----------------------------------
+        # ENRICH RESPONSE
+        # -----------------------------------
 
-            "prompt_chain"
+        structured["normalized_query"] = (
+            normalized_query
+        )
 
-        ] = [
+        structured["needs_clarification"] = (
+            validation[
+                "needs_clarification"
+            ]
+        )
 
+        structured["validation"] = (
+            validation
+        )
+
+        structured["search_payload"] = (
+            search_payload
+        )
+
+        structured["prompt_chain"] = [
             step["stage"]
-
-            for step
-
-            in chain
-
+            for step in chain
         ]
 
         return structured

@@ -100,6 +100,8 @@ class ChatResponse(
 
     session_id: str
 
+    response_type: str = "chat"
+
     recommendations: List[
         RecommendationCard
     ] = Field(

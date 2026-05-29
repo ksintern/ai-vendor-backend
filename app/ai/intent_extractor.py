@@ -27,7 +27,8 @@ class IntentExtractor:
         "premium",
         "luxury",
         "cost",
-        "affordable"
+        "affordable",
+        "economical"
 
     }
 
@@ -44,8 +45,21 @@ class IntentExtractor:
         "review",
         "reviews",
         "best",
-        "top"
+        "top",
+        "highest",
+        "recommended"
+    }
 
+    QUALITY = {
+
+        "best",
+        "top",
+        "trusted",
+        "experienced",
+        "highest",
+        "recommended",
+        "top rated",
+        "highly rated"
     }
 
     AVAILABILITY = {
@@ -79,11 +93,11 @@ class IntentExtractor:
         "provide",
         "provides",
         "offering",
-        "offer"
-
+        "offer",
+        "facilities"
     }
 
-    COMPARE_PATTERNS=[
+    COMPARE_PATTERNS = [
 
         r"\bcompare\b",
 
@@ -94,338 +108,425 @@ class IntentExtractor:
         r"\bbetter\b",
 
         r"\bdifference\b"
-
     ]
 
     @staticmethod
     def extract(
-
-        query:str
-
+        query: str
     ):
 
-        query_lower=(
-
+        query_lower = (
             query
             .lower()
             .strip()
-
         )
 
-        filters=(
-
+        filters = (
             QueryParser
             .extract_filters(
-
                 query
-
             )
-
         )
 
-        vendor_names=(
-
+        vendor_names = (
             IntentExtractor
             ._extract_vendor_names(
-
                 query
-
             )
-
         )
 
-        if len(
-
-            vendor_names
-
-        )>=2:
+        if len(vendor_names) >= 2:
 
             filters[
-
                 "comparison_request"
-
-            ]=True
+            ] = True
 
             filters[
-
                 "vendor_names"
+            ] = vendor_names
 
-            ]=vendor_names
-
-        tokens=set(
+        tokens = set(
 
             re.findall(
-
                 r"\w+",
-
                 query_lower
-
             )
 
         )
 
-        intent=(
-
+        intent_data = (
             IntentExtractor
             .detect_intent(
-
                 query_lower,
-
                 tokens,
-
                 filters
-
             )
-
         )
 
         return {
 
             "intent":
+            intent_data["intent"],
 
-            intent,
+            "secondary_intents":
+            intent_data["secondary_intents"],
+
+            "confidence":
+            intent_data["confidence"],
 
             "filters":
-
             filters
-
         }
 
     @staticmethod
     def detect_intent(
-
-        query:str,
-
-        tokens:set,
-
-        filters:dict
-
+        query: str,
+        tokens: set,
+        filters: dict
     ):
 
-        if filters.get(
+        secondary_intents = []
 
+        confidence = 0.70
+
+        # ----------------------------------
+        # SERVICE QUERY
+        # ----------------------------------
+
+        if filters.get(
             "service_request"
-
         ):
 
-            return (
+            return {
 
-                "service_query"
+                "intent":
+                "service_query",
 
-            )
+                "secondary_intents":
+                secondary_intents,
+
+                "confidence":
+                0.98
+            }
+
+        # ----------------------------------
+        # COMPARISON QUERY
+        # ----------------------------------
 
         if filters.get(
-
             "comparison_request"
-
         ):
 
-            return (
+            if filters.get(
+                "pricing_preference"
+            ):
+                secondary_intents.append(
+                    "pricing_query"
+                )
 
-                "comparison_query"
+            return {
 
-            )
+                "intent":
+                "comparison_query",
+
+                "secondary_intents":
+                secondary_intents,
+
+                "confidence":
+                0.99
+            }
 
         for pattern in (
-
             IntentExtractor
             .COMPARE_PATTERNS
-
         ):
 
             if re.search(
-
                 pattern,
-
                 query
-
             ):
 
-                return (
+                return {
 
-                    "comparison_query"
+                    "intent":
+                    "comparison_query",
 
-                )
+                    "secondary_intents":
+                    secondary_intents,
 
-        intent_priority=[
+                    "confidence":
+                    0.99
+                }
 
-            (
+        # ----------------------------------
+        # QUALITY QUERY
+        # ----------------------------------
 
-                IntentExtractor.SERVICE,
-
-                "service_query"
-
-            ),
-
-            (
-
-                IntentExtractor.COMPARISON,
-
-                "comparison_query"
-
-            ),
-
-            (
-
-                IntentExtractor.PRICING,
-
-                "pricing_query"
-
-            ),
-
-            (
-
-                IntentExtractor.CATEGORY,
-
-                "category_query"
-
-            ),
-
-            (
-
-                IntentExtractor.REVIEW,
-
-                "review_query"
-
-            ),
-
-            (
-
-                IntentExtractor.AVAILABILITY,
-
-                "availability_query"
-
-            ),
-
-            (
-
-                IntentExtractor.ANALYTICS,
-
-                "analytics_query"
-
-            ),
-
-            (
-
-                IntentExtractor.SAVED,
-
-                "saved_vendor_query"
-
-            )
-
-        ]
-
-        for keywords,intent in (
-
-            intent_priority
-
+        if any(
+            term in query
+            for term
+            in IntentExtractor.QUALITY
         ):
 
-            if tokens & keywords:
+            secondary_intents.append(
+                "vendor_recommendation"
+            )
 
-                return intent
+            return {
+
+                "intent":
+                "quality_query",
+
+                "secondary_intents":
+                secondary_intents,
+
+                "confidence":
+                0.95
+            }
+
+        # ----------------------------------
+        # REVIEW QUERY
+        # ----------------------------------
+
+        if tokens & (
+            IntentExtractor
+            .REVIEW
+        ):
+
+            return {
+
+                "intent":
+                "review_query",
+
+                "secondary_intents":
+                secondary_intents,
+
+                "confidence":
+                0.95
+            }
+
+        # ----------------------------------
+        # PRICING QUERY
+        # ----------------------------------
+
+        if tokens & (
+            IntentExtractor
+            .PRICING
+        ):
+
+            if filters.get(
+                "category"
+            ):
+
+                secondary_intents.append(
+                    "vendor_recommendation"
+                )
+
+            return {
+
+                "intent":
+                "pricing_query",
+
+                "secondary_intents":
+                secondary_intents,
+
+                "confidence":
+                0.92
+            }
+
+        # ----------------------------------
+        # CATEGORY QUERY
+        # ----------------------------------
+
+        if tokens & (
+            IntentExtractor
+            .CATEGORY
+        ):
+
+            return {
+
+                "intent":
+                "category_query",
+
+                "secondary_intents":
+                secondary_intents,
+
+                "confidence":
+                0.90
+            }
+
+        # ----------------------------------
+        # AVAILABILITY
+        # ----------------------------------
+
+        if tokens & (
+            IntentExtractor
+            .AVAILABILITY
+        ):
+
+            return {
+
+                "intent":
+                "availability_query",
+
+                "secondary_intents":
+                secondary_intents,
+
+                "confidence":
+                0.90
+            }
+
+        # ----------------------------------
+        # ANALYTICS
+        # ----------------------------------
+
+        if tokens & (
+            IntentExtractor
+            .ANALYTICS
+        ):
+
+            return {
+
+                "intent":
+                "analytics_query",
+
+                "secondary_intents":
+                secondary_intents,
+
+                "confidence":
+                0.90
+            }
+
+        # ----------------------------------
+        # SAVED VENDORS
+        # ----------------------------------
+
+        if tokens & (
+            IntentExtractor
+            .SAVED
+        ):
+
+            return {
+
+                "intent":
+                "saved_vendor_query",
+
+                "secondary_intents":
+                secondary_intents,
+
+                "confidence":
+                0.90
+            }
+
+        # ----------------------------------
+        # RECOMMENDATION
+        # ----------------------------------
+
+        recommendation_signals = [
+
+            "category",
+
+            "budget",
+
+            "city",
+
+            "guest_count",
+
+            "cuisine",
+
+            "event_type"
+        ]
 
         if any(
 
             filters.get(
-
                 field
-
             )
 
-            for field in [
-
-                "category",
-
-                "budget",
-
-                "city",
-
-                "guest_count",
-
-                "cuisine",
-
-                "event_type"
-
-            ]
+            for field in recommendation_signals
 
         ):
 
-            return (
+            return {
 
-                "vendor_recommendation"
+                "intent":
+                "vendor_recommendation",
 
-            )
+                "secondary_intents":
+                secondary_intents,
 
-        return (
+                "confidence":
+                0.95
+            }
 
-            "generic_platform_query"
+        # ----------------------------------
+        # GENERIC
+        # ----------------------------------
 
-        )
+        return {
+
+            "intent":
+            "generic_platform_query",
+
+            "secondary_intents":
+            secondary_intents,
+
+            "confidence":
+            confidence
+        }
 
     @staticmethod
     def _extract_vendor_names(
-
-        query:str
-
+        query: str
     ):
 
-        lowered=(
-
+        lowered = (
             query.lower()
-
         )
 
-        separators=[
+        separators = [
 
             " vs ",
 
             " versus ",
 
             " and "
-
         ]
 
         for separator in separators:
 
             if separator in lowered:
 
-                pieces=[
+                pieces = [
 
                     item.strip()
 
                     for item
 
                     in lowered.split(
-
                         separator
-
                     )
-
                 ]
 
-                cleaned=[]
+                cleaned = []
 
                 for piece in pieces:
 
-                    piece=re.sub(
+                    piece = re.sub(
 
                         r"\b(compare|better|difference|between|which|is|vendor)\b",
 
                         "",
 
                         piece
-
                     )
 
-                    piece=piece.strip()
+                    piece = piece.strip()
 
                     if piece:
 
                         cleaned.append(
-
                             piece
-
                         )
 
                 return cleaned

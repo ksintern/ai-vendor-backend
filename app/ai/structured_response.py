@@ -1,6 +1,7 @@
 from typing import Dict
 from typing import Any
 from typing import Optional
+from typing import List
 
 
 class StructuredResponseBuilder:
@@ -9,12 +10,15 @@ class StructuredResponseBuilder:
 
         "intent": "vendor_recommendation",
 
+        "secondary_intents": [],
+
         "filters": {},
 
         "missing_fields": [],
 
-        "confidence": 0.0
+        "needs_clarification": False,
 
+        "confidence": 0.0
     }
 
     @classmethod
@@ -28,7 +32,9 @@ class StructuredResponseBuilder:
 
         intent: str,
 
-        confidence: float
+        confidence: float,
+
+        secondary_intents: Optional[List[str]] = None
 
     ) -> Dict[str, Any]:
 
@@ -54,9 +60,21 @@ class StructuredResponseBuilder:
 
                     final_filters[key] = value
 
-        missing = cls._find_missing(
+        missing_fields = cls._find_missing(
 
-            final_filters
+            intent=intent,
+
+            filters=final_filters
+
+        )
+
+        needs_clarification = (
+
+            len(
+
+                missing_fields
+
+            ) > 0
 
         )
 
@@ -66,13 +84,21 @@ class StructuredResponseBuilder:
 
             intent,
 
+            "secondary_intents":
+
+            secondary_intents or [],
+
             "filters":
 
             final_filters,
 
             "missing_fields":
 
-            missing,
+            missing_fields,
+
+            "needs_clarification":
+
+            needs_clarification,
 
             "confidence":
 
@@ -89,9 +115,32 @@ class StructuredResponseBuilder:
     @staticmethod
     def _find_missing(
 
-        filters
+        intent: str,
 
-    ):
+        filters: Dict[str, Any]
+
+    ) -> List[str]:
+
+        # ----------------------------------
+        # INTENTS THAT DO NOT REQUIRE
+        # CLARIFICATION
+        # ----------------------------------
+
+        if intent in [
+
+            "comparison_query",
+
+            "service_query",
+
+            "review_query",
+
+            "analytics_query",
+
+            "saved_vendor_query"
+
+        ]:
+
+            return []
 
         missing = []
 
@@ -105,6 +154,30 @@ class StructuredResponseBuilder:
 
         )
 
+        event_type = (
+
+            filters.get(
+
+                "event_type"
+
+            )
+
+        )
+
+        city = (
+
+            filters.get(
+
+                "city"
+
+            )
+
+        )
+
+        # ----------------------------------
+        # CATEGORY
+        # ----------------------------------
+
         if not category:
 
             missing.append(
@@ -115,17 +188,33 @@ class StructuredResponseBuilder:
 
             return missing
 
-        if not filters.get(
+        # ----------------------------------
+        # LOCATION
+        # ----------------------------------
 
-            "city"
-
-        ):
+        if not city:
 
             missing.append(
 
                 "city"
 
             )
+
+        # ----------------------------------
+        # EVENT TYPE
+        # ----------------------------------
+
+        if not event_type:
+
+            missing.append(
+
+                "event_type"
+
+            )
+
+        # ----------------------------------
+        # CATEGORY SPECIFIC RULES
+        # ----------------------------------
 
         if (
 
@@ -161,4 +250,66 @@ class StructuredResponseBuilder:
 
                 )
 
-        return missing
+        elif (
+
+            category
+
+            ==
+
+            "venue"
+
+        ):
+
+            if not filters.get(
+
+                "budget"
+
+            ):
+
+                missing.append(
+
+                    "budget"
+
+                )
+
+        elif (
+
+            category
+
+            in [
+
+                "photography",
+
+                "decoration",
+
+                "music",
+
+                "planner",
+
+                "makeup"
+
+            ]
+
+        ):
+
+            if not filters.get(
+
+                "budget"
+
+            ):
+
+                missing.append(
+
+                    "budget"
+
+                )
+
+        return list(
+
+            set(
+
+                missing
+
+            )
+
+        )

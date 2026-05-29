@@ -45,6 +45,10 @@ from app.api.routes.chat import (
     router as chat_router
 )
 
+from app.api.routes.query import (
+    router as query_router
+)
+
 
 # =====================================
 # EXCEPTION HANDLERS
@@ -331,5 +335,11 @@ app.include_router(
 app.include_router(
 
     chat_router
+
+)
+
+app.include_router(
+
+    query_router
 
 )
