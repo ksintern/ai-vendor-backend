@@ -55,7 +55,7 @@ class ChatSession(Base):
 
         ForeignKey("users.user_id"),
 
-        nullable=False
+        nullable=True
 
     )
 

@@ -102,6 +102,18 @@ class ChatResponse(
 
     response_type: str = "chat"
 
+    current_question: Optional[
+        str
+    ] = None
+
+    missing_fields: List[
+        str
+    ] = Field(
+
+        default_factory=list
+
+    )
+
     recommendations: List[
         RecommendationCard
     ] = Field(

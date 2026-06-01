@@ -629,6 +629,35 @@ def search_vendors_ai(
     filters: dict
 
 ):
+    CATEGORY_DB_MAP = {
+
+        "decoration": "decorators",
+
+        "photography": "photography",
+
+        "catering": "catering"
+
+    }
+
+    category = filters.get("category")
+
+    if category:
+
+        filters = {
+
+            **filters,
+
+            "category": CATEGORY_DB_MAP.get(
+                category,
+                category
+            )
+
+        }
+
+    print(
+        "SEARCH CATEGORY:",
+        filters.get("category")
+    )
 
     vendors,total=(
 
