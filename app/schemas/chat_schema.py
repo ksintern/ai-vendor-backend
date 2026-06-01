@@ -23,18 +23,41 @@ class RecommendationCard(
 
     vendor_id: str
 
-    name: str
+    vendor_name: str
+
+    category: Optional[
+        str
+    ] = None
 
     city: str
 
     rating: float
 
-    price_min: Optional[int] = None
+    review_count: int = 0
 
-    price_max: Optional[int] = None
+    price_min: Optional[
+        int
+    ] = None
 
-    description: Optional[str] = None
+    price_max: Optional[
+        int
+    ] = None
 
+    price_range: Optional[
+        str
+    ] = None
+
+    vendor_description: Optional[
+        str
+    ] = None
+
+    recommendation_reason: Optional[
+        str
+    ] = None
+
+    relevance_score: int = 0
+
+    featured_badge: Optional[str] = None
 
 class ChatRequest(
 

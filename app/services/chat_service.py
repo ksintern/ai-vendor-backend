@@ -6,8 +6,8 @@ from app.ai.ai_service import AIService
 from app.ai.intent_extractor import IntentExtractor
 from app.ai.data_orchestrator import DataOrchestrator
 from app.ai.session_manager import SessionManager
-from app.ai.followup_generator import FollowUpGenerator
 from app.ai.conversation_orchestrator import ConversationOrchestrator
+from app.ai.recommendation_formatter import RecommendationFormatter
 from app.services.chat_session_service import ChatSessionService
 
 from app.schemas.chat_schema import ChatRequest
@@ -118,7 +118,9 @@ class ChatService:
                     "session_id": session_id,
                     "response_type": "chat",
                     "recommendations": [
-                        self._vendor_card(vendor)
+                        RecommendationFormatter.format_vendor(
+                            vendor
+                        )
                         for vendor in remembered[:self.MAX_VENDOR_CARDS]
                     ],
                     "error": None
@@ -333,10 +335,11 @@ class ChatService:
                     if response_type == "followup"
                     else []
                 ),
-                "recommendations": [
-                    self._vendor_card(vendor)
-                    for vendor in recommendations[:self.MAX_VENDOR_CARDS]
-                ],
+                "recommendations":
+                    RecommendationFormatter.format_vendors(
+                        recommendations[:self.MAX_VENDOR_CARDS],
+                        filters
+                    ),
                 "error": None
             }
 
@@ -434,17 +437,4 @@ class ChatService:
 
         return None
 
-    def _vendor_card(self, vendor):
-
-        return {
-            "vendor_id": str(vendor.vendor_id),
-            "name": vendor.name,
-            "city": vendor.city,
-            "rating": getattr(
-                vendor,
-                "avg_rating",
-                0
-            ),
-            "price_min": vendor.price_min,
-            "price_max": vendor.price_max
-        }
+   
