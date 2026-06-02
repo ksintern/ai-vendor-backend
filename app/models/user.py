@@ -253,3 +253,13 @@ class User(Base):
         cascade="all, delete-orphan"
 
     )
+
+    recommendation_history = relationship(
+
+        "RecommendationHistory",
+
+        back_populates="user",
+
+        cascade="all, delete-orphan"
+
+    )

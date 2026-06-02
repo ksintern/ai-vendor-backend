@@ -36,6 +36,18 @@ from app.services.chat_service import (
 
 )
 
+from app.api.dependencies.auth_dependency import (
+
+    get_current_user
+
+)
+
+from app.models.user import (
+
+    User
+
+)
+
 
 router = APIRouter(
 
@@ -77,6 +89,12 @@ async def chat(
 
     payload: ChatRequest,
 
+    current_user: User = Depends(
+
+        get_current_user
+
+    ),
+
     chat_service: ChatService = Depends(
 
         get_chat_service
@@ -93,7 +111,9 @@ async def chat(
 
             .process_message(
 
-                payload
+                payload,
+
+                current_user
 
             )
 

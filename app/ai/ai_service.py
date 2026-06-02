@@ -343,7 +343,8 @@ class AIService:
     async def build_structured_response(
         self,
         user_message: str,
-        previous: Optional[Dict] = None
+        previous: Optional[Dict] = None,
+        conversation_context: str = ""
     ):
 
         # -----------------------------------
@@ -377,6 +378,15 @@ class AIService:
                 previous or {}
             )
         )
+
+        if conversation_context:
+
+            normalized_query = (
+                f"Conversation Context:\n"
+                f"{conversation_context}\n\n"
+                f"Current User Query:\n"
+                f"{normalized_query}"
+            )
 
         # -----------------------------------
         # LLM FILTERS

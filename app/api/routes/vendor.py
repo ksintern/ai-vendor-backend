@@ -44,6 +44,10 @@ from app.services.vendor_service import (
 
 )
 
+from app.services.user_preference_service import (
+    UserPreferenceService
+)
+
 from app.api.dependencies.auth_dependency import (
 
     require_role
@@ -1529,6 +1533,12 @@ def track_vendor_view_api(
 
         view
 
+    )
+
+    UserPreferenceService.learn_from_vendor_view(
+        db=db,
+        user_id=current_user.user_id,
+        vendor_id=vendor_id
     )
 
     vendor.profile_views=(

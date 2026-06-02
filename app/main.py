@@ -49,6 +49,8 @@ from app.api.routes.query import (
     router as query_router
 )
 
+from app.api.routes.session import router as session_router
+
 
 # =====================================
 # EXCEPTION HANDLERS
@@ -342,4 +344,8 @@ app.include_router(
 
     query_router
 
+)
+
+app.include_router(
+    session_router
 )

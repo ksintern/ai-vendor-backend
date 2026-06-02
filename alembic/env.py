@@ -33,6 +33,12 @@ from app.models.conversation import Conversation
 from app.models.search_history import SearchHistory
 from app.models.recommendation_metadata import RecommendationMetadata
 from app.models.semantic_embedding import SemanticEmbedding
+from app.models.chat_session import ChatSession
+from app.models.recommendation_history import RecommendationHistory
+from app.models.saved_vendor import SavedVendor
+from app.models.vendor_follow import VendorFollow
+from app.models.notification import Notification
+from app.models.service import Service
 
 target_metadata = Base.metadata
 

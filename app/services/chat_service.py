@@ -9,6 +9,9 @@ from app.ai.session_manager import SessionManager
 from app.ai.conversation_orchestrator import ConversationOrchestrator
 from app.ai.recommendation_formatter import RecommendationFormatter
 from app.services.chat_session_service import ChatSessionService
+from app.services.conversation_service import ConversationService
+from app.services.recommendation_history_service import RecommendationHistoryService
+from app.services.user_preference_service import UserPreferenceService
 
 from app.schemas.chat_schema import ChatRequest
 
@@ -46,8 +49,16 @@ class ChatService:
         self.db = db
         self.ai_service = AIService()
 
-    async def process_message(self, payload: ChatRequest):
+    async def process_message(
+        self,
+        payload: ChatRequest,
+        current_user
+    ):
 
+        ChatSessionService.expire_old_sessions(
+            self.db
+        )
+        
         session_id = payload.session_id or str(uuid.uuid4())
 
         # -----------------------------------
@@ -61,9 +72,14 @@ class ChatService:
 
         if not db_session:
 
+            ChatSessionService.expire_user_active_sessions(
+                self.db,
+                current_user.user_id
+            )
+
             ChatSessionService.create_session(
                 db=self.db,
-                user_id=None,
+                user_id=current_user.user_id,
                 session_id=session_id
             )
 
@@ -131,9 +147,18 @@ class ChatService:
             # -----------------------------------
 
             try:
+                conversation_context = (
+                    ConversationService.build_context_summary(
+                        db=self.db,
+                        session_id=session_id,
+                        max_messages=10
+                    )
+                )
+
                 structured = await self.ai_service.build_structured_response(
                     user_message,
-                    previous
+                    previous,
+                    conversation_context
                 )
 
             except Exception:
@@ -145,6 +170,14 @@ class ChatService:
 
             filters = structured.get("filters", {})
             intent = structured.get("intent")
+
+            if (
+                previous
+                and filters
+                and intent == "comparison_query"
+            ):
+
+                intent = "vendor_recommendation"
 
             filters = {
                 k: v
@@ -225,6 +258,18 @@ class ChatService:
 
                 response_type = "followup"
 
+                ConversationService.create_conversation(
+                    db=self.db,
+                    session_id=session_id,
+                    user_id=current_user.user_id,
+                    user_message=user_message,
+                    ai_response=assistant,
+                    detected_intent=intent,
+                    applied_filters=filters,
+                    is_follow_up=True,
+                    context_summary=f"Missing fields: {missing_fields}"
+                )
+
             else:
 
                 response_type = "recommendation"
@@ -246,9 +291,10 @@ class ChatService:
                 # DATABASE CONTEXT
                 # -----------------------------------
 
-                print(
-                    "FINAL FILTERS:",
-                    filters
+                UserPreferenceService.learn_from_chat(
+                    db=self.db,
+                    user_id=current_user.user_id,
+                    filters=filters
                 )
                 
                 context = DataOrchestrator.fetch_context(
@@ -292,6 +338,28 @@ class ChatService:
                         "Perfect. I found vendor options matching your requirements."
                     )
 
+                    ConversationService.create_conversation(
+                        db=self.db,
+                        session_id=session_id,
+                        user_id=current_user.user_id,
+                        user_message=user_message,
+                        ai_response=assistant,
+                        detected_intent=intent,
+                        applied_filters=filters,
+                        is_follow_up=False,
+                        context_summary="Vendor recommendations generated"
+                    )
+
+                    for vendor in recommendations:
+
+                        RecommendationHistoryService.create_recommendation_record(
+                            db=self.db,
+                            user_id=current_user.user_id,
+                            session_id=session_id,
+                            vendor_id=vendor.vendor_id,
+                            filters_snapshot=filters
+                        )
+
                 else:
 
                     ChatSessionService.update_session(
@@ -304,6 +372,18 @@ class ChatService:
 
                     assistant = (
                         "Sorry, I couldn't find matching vendors."
+                    )
+
+                    ConversationService.create_conversation(
+                        db=self.db,
+                        session_id=session_id,
+                        user_id=current_user.user_id,
+                        user_message=user_message,
+                        ai_response=assistant,
+                        detected_intent=intent,
+                        applied_filters=filters,
+                        is_follow_up=False,
+                        context_summary="No matching vendors found"
                     )
 
             # -----------------------------------

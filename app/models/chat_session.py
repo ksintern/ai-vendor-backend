@@ -127,3 +127,13 @@ class ChatSession(Base):
         "User",
         back_populates="chat_sessions"
     )
+
+    recommendation_history = relationship(
+
+        "RecommendationHistory",
+
+        back_populates="session",
+
+        cascade="all, delete-orphan"
+
+    )
