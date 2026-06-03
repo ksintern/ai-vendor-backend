@@ -135,6 +135,7 @@ Allowed schema:
   "guest_count": null,
   "event_type": null,
   "pricing_preference": null,
+  "rating": null,
   "service_request": false,
   "comparison_request": false
 }
@@ -148,8 +149,9 @@ Rules:
 5. Convert extracted text values to lowercase.
 6. Budget must always be numeric.
 7. Guest count must always be numeric.
-8. Do not include additional fields.
-9. Return valid parsable JSON only.
+8. Rating must always be numeric.
+9. Do not include additional fields.
+10. Return valid parsable JSON only.
 
 Vendor Category Mapping:
 
@@ -182,6 +184,15 @@ Budget Conversion Rules:
 - 80k -> 80000
 - 1 lakh -> 100000
 - 2 lakh -> 200000
+
+Rating Extraction Rules:
+
+Examples:
+
+- above 4.5 rating -> 4.5
+- rating above 4 -> 4
+- minimum rating 4.2 -> 4.2
+- highly rated vendors -> 4.5
 
 Intent Rules:
 
@@ -242,6 +253,22 @@ Output:
   "guest_count": null,
   "event_type": "wedding",
   "pricing_preference": "premium",
+  "service_request": false,
+  "comparison_request": false
+}
+
+Input:
+Find wedding caterers in Delhi above 4.5 rating
+
+Output:
+{
+  "category": "catering",
+  "budget": null,
+  "city": "delhi",
+  "guest_count": null,
+  "event_type": "wedding",
+  "pricing_preference": null,
+  "rating": 4.5,
   "service_request": false,
   "comparison_request": false
 }

@@ -653,12 +653,7 @@ def search_vendors_ai(
             )
 
         }
-
-    print(
-        "SEARCH CATEGORY:",
-        filters.get("category")
-    )
-
+  
     vendors,total=(
 
         search_vendors(
@@ -698,6 +693,9 @@ def search_vendors_ai(
         )
 
     )
+
+    print("AFTER DB QUERY - total:", total)
+    print("AFTER DB QUERY - vendors:", [v.name for v in vendors])
 
     pricing=filters.get(
 
@@ -756,41 +754,31 @@ def search_vendors_ai(
 
         )
 
-        for vendor in vendors:
+        if allowed:
+            matched = []
+            unmatched = []
 
-            text=(
+            for vendor in vendors:
 
-                f"{vendor.name or ''} "
+                text=(
 
-                f"{vendor.description or ''}"
+                    f"{vendor.name or ''} "
 
-            ).lower()
+                    f"{vendor.description or ''}"
 
-            matched=any(
+                ).lower()
 
-                word in text
+                if any(word in text for word in allowed):
+                    matched.append(vendor)
+                else:
+                    unmatched.append(vendor)
 
-                for word
+            print("AFTER PRICING FILTER - vendors:", [v.name for v in vendors])
+            print("AFTER PRICING FILTER - total:", total)
 
-                in allowed
-
-            )
-
-            if matched:
-
-                filtered.append(
-
-                    vendor
-
-                )
-
-        vendors=filtered
-
-        total=len(
-
-            vendors
-
-        )
+            # Prefer keyword-matched vendors, but fall back to all vendors
+            vendors = matched if matched else unmatched
+            total = len(vendors)
 
     return {
 

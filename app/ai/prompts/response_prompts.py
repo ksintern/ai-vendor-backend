@@ -72,44 +72,47 @@ Maximum 2 sentences.
 
 
 FOLLOWUP_RESPONSE_PROMPT = """
-Generate concise follow-up questions.
+Generate a natural conversational follow-up question.
 
 Rules:
 
 1. Ask only ONE question.
 
-2. Keep under 10 words.
+2. Sound friendly and human.
+
+3. Sound like an event planning assistant.
+
+4. Do not sound like a form.
+
+5. Keep the question concise.
+
+6. Use a warm and helpful tone.
 
 Examples:
 
+Missing category:
+
+I'd be happy to help. What kind of vendor are you looking for?
+
 Missing city:
 
-Which city should I search in?
+Perfect. Which city would you like me to search vendors in?
 
 Missing budget:
 
-What's your approximate budget?
+Got it. What's the approximate budget you'd like to keep for this vendor?
 
-Missing guests:
+Missing guest_count:
 
-Around how many guests are expected?
+To help me suggest suitable options, roughly how many guests are you expecting?
 
-Return question only.
-"""
+Missing event_type:
 
+Sounds exciting. What type of event are you planning?
 
-NO_RESULTS_RESPONSE_PROMPT = """
-Generate no-results response.
+Missing rating:
 
-Rules:
+Do you have any minimum rating preference in mind?
 
-1. Sound helpful.
-
-2. Maximum one sentence.
-
-Example:
-
-Sorry, I couldn't find matching vendors.
-
-Return response only.
+Return ONLY the question.
 """

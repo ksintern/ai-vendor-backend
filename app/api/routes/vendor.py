@@ -2350,6 +2350,165 @@ def get_recommendations_api(
         vendors
 
     }
+# ==========================================
+# USER PREFERENCES
+# ==========================================
+
+@router.get(
+    "/preferences/me"
+)
+def get_my_preferences_api(
+
+    db: Session = Depends(
+        get_db
+    ),
+
+    current_user: User = Depends(
+        require_role(
+            [
+                "user",
+                "vendor",
+                "admin"
+            ]
+        )
+    )
+
+):
+
+    preference = (
+        UserPreferenceService.get_user_preferences(
+            db=db,
+            user_id=current_user.user_id
+        )
+    )
+
+    if not preference:
+
+        return {
+            "success": True,
+            "preferences": None
+        }
+
+    return {
+        "success": True,
+        "preferences": {
+            "preferred_category":
+                preference.preferred_category,
+
+            "preferred_city":
+                preference.preferred_city,
+
+            "preferred_price_range":
+                preference.preferred_price_range,
+
+            "preferred_event_type":
+                preference.preferred_event_type,
+
+            "preferred_min_rating":
+                preference.preferred_min_rating,
+
+            "favorite_vendor_id":
+                (
+                    str(
+                        preference.favorite_vendor_id
+                    )
+                    if preference.favorite_vendor_id
+                    else None
+                )
+        }
+    }
+
+# ==========================================
+# UPDATE USER PREFERENCES
+# ==========================================
+
+@router.put(
+    "/preferences/me"
+)
+def update_my_preferences_api(
+
+    category: str | None = None,
+
+    city: str | None = None,
+
+    event_type: str | None = None,
+
+    price_range: str | None = None,
+
+    min_rating: float | None = None,
+
+    vendor_id: UUID | None = None,
+
+    db: Session = Depends(
+        get_db
+    ),
+
+    current_user: User = Depends(
+        require_role(
+            [
+                "user",
+                "vendor",
+                "admin"
+            ]
+        )
+    )
+
+):
+
+    preference = (
+
+        UserPreferenceService.create_or_update_preferences(
+
+            db=db,
+
+            user_id=current_user.user_id,
+
+            category=category,
+
+            city=city,
+
+            event_type=event_type,
+
+            vendor_id=vendor_id,
+
+            price_range=price_range,
+
+            min_rating=min_rating
+        )
+
+    )
+
+    return {
+
+        "success": True,
+
+        "preferences": {
+
+            "preferred_category":
+                preference.preferred_category,
+
+            "preferred_city":
+                preference.preferred_city,
+
+            "preferred_price_range":
+                preference.preferred_price_range,
+
+            "preferred_event_type":
+                preference.preferred_event_type,
+
+            "preferred_min_rating":
+                preference.preferred_min_rating,
+
+            "favorite_vendor_id":
+                (
+                    str(
+                        preference.favorite_vendor_id
+                    )
+                    if preference.favorite_vendor_id
+                    else None
+                )
+        }
+    }
 
 # ==========================================
 # SINGLE

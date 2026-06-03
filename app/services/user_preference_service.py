@@ -28,11 +28,12 @@ class UserPreferenceService:
     def create_or_update_preferences(
         db: Session,
         user_id,
-        category_id=None,
+        category=None,
         city=None,
         event_type=None,
         vendor_id=None,
-        price_range=None
+        price_range=None,
+        min_rating=None
     ):
 
         preference = (
@@ -54,7 +55,7 @@ class UserPreferenceService:
 
                 user_id=user_id,
 
-                preferred_category_id=category_id,
+                preferred_category=category,
 
                 preferred_city=city,
 
@@ -62,7 +63,13 @@ class UserPreferenceService:
 
                 favorite_vendor_id=vendor_id,
 
-                preferred_price_range=price_range
+                preferred_price_range=price_range,
+
+                preferred_min_rating=(
+                    float(min_rating)
+                    if min_rating is not None
+                    else None
+                )
             )
 
             db.add(
@@ -71,10 +78,10 @@ class UserPreferenceService:
 
         else:
 
-            if category_id:
+            if category:
 
-                preference.preferred_category_id = (
-                    category_id
+                preference.preferred_category = (
+                    category
                 )
 
             if city:
@@ -101,6 +108,12 @@ class UserPreferenceService:
                     price_range
                 )
 
+            if min_rating is not None:
+
+                preference.preferred_min_rating = (
+                    float(min_rating)
+                )  
+
         db.commit()
 
         db.refresh(
@@ -126,6 +139,10 @@ class UserPreferenceService:
 
             user_id=user_id,
 
+            category=filters.get(
+                "category"
+            ),
+
             city=filters.get(
                 "city"
             ),
@@ -144,6 +161,10 @@ class UserPreferenceService:
                     "budget"
                 )
                 else None
+            ),
+
+            min_rating=filters.get(
+                "rating"
             )
         )
 

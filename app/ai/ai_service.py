@@ -81,9 +81,9 @@ class AIService:
 
     REQUEST_TIMEOUT = 180
 
-    TEMPERATURE = 0
+    TEMPERATURE = 0.7
 
-    MAX_OUTPUT_TOKENS = 20
+    MAX_OUTPUT_TOKENS = 200
 
     def __init__(
 
@@ -612,6 +612,7 @@ class AIService:
 
             )
 
+
             prompt = (
 
                 f"{template}\n\n"
@@ -625,6 +626,7 @@ class AIService:
                 f"Pricing:{pricing}\n"
 
                 f"City:{city}"
+
 
             )
 
@@ -786,10 +788,13 @@ class AIService:
                             "content":
 
                             (
-                                "You are an AI vendor "
-                                "discovery assistant. "
-                                "Return concise and "
-                                "structured responses."
+                                "You are a warm, friendly, and emotionally intelligent "
+                                "event planning assistant. "
+                                "Adapt your tone based on the user's event type, budget, "
+                                "preferences, and context. "
+                                "Be conversational, natural, and engaging. "
+                                "Use occasional emojis when appropriate. "
+                                "Avoid robotic responses."
                             )
 
                         },

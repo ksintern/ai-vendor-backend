@@ -6,7 +6,8 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     Index,
-    String
+    String,
+    Float
 )
 
 from sqlalchemy.dialects.postgresql import UUID
@@ -28,7 +29,7 @@ class UserPreference(Base):
 
             "idx_user_preference_category",
 
-            "preferred_category_id"
+            "preferred_category"
 
         ),
 
@@ -98,18 +99,11 @@ class UserPreference(Base):
 
     )
 
-    preferred_category_id = Column(
+    preferred_category = Column(
 
-        UUID(as_uuid=True),
-
-        ForeignKey(
-
-            "categories.category_id"
-
-        ),
+        String,
 
         nullable=True
-
     )
 
     preferred_city = Column(
@@ -134,6 +128,11 @@ class UserPreference(Base):
 
         nullable=True
 
+    )
+
+    preferred_min_rating = Column(
+        Float,
+        nullable=True
     )
 
     favorite_vendor_id = Column(
@@ -191,12 +190,6 @@ class UserPreference(Base):
         back_populates=
 
         "preferences"
-
-    )
-
-    preferred_category = relationship(
-
-        "Category"
 
     )
 

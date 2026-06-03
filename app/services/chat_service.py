@@ -60,6 +60,7 @@ class ChatService:
         )
         
         session_id = payload.session_id or str(uuid.uuid4())
+        print("SESSION ID:", session_id)
 
         # -----------------------------------
         # PERSISTENT CHAT SESSION
@@ -185,6 +186,15 @@ class ChatService:
                 if v is not None
             }
 
+            if previous:
+
+                filters = (
+                    ConversationOrchestrator.merge_context(
+                        previous,
+                        filters
+                    )
+                )
+
             SessionManager.set_filters(
                 session_id,
                 filters
@@ -208,7 +218,6 @@ class ChatService:
             # -----------------------------------
             # MISSING FIELD DETECTION
             # -----------------------------------
-
             missing = structured.get(
                 "missing_fields",
                 []
@@ -296,6 +305,47 @@ class ChatService:
                     user_id=current_user.user_id,
                     filters=filters
                 )
+
+                preference = (
+                    UserPreferenceService.get_user_preferences(
+                        db=self.db,
+                        user_id=current_user.user_id
+                    )
+                )
+
+                if preference:
+
+                    if (
+                        not filters.get("category")
+                        and preference.preferred_category is not None
+                    ):  
+                        filters["category"] = (
+                            preference.preferred_category
+                        )
+
+                    if (
+                        not filters.get("city")
+                        and preference.preferred_city is not None
+                    ):
+                        filters["city"] = (
+                            preference.preferred_city
+                        )
+
+                    if (
+                        not filters.get("event_type")
+                        and preference.preferred_event_type is not None
+                    ):
+                        filters["event_type"] = (
+                            preference.preferred_event_type
+                        )
+
+                    # if (
+                    #     not filters.get("rating")
+                    #     and preference.preferred_min_rating is not None
+                    # ):
+                    #     filters["rating"] = (
+                    #         preference.preferred_min_rating
+                    #     )   
                 
                 context = DataOrchestrator.fetch_context(
                     self.db,
@@ -311,11 +361,6 @@ class ChatService:
                         "vendors",
                         []
                     )
-                )
-
-                print(
-                    "FOUND VENDORS:",
-                    len(recommendations)
                 )
 
                 # -----------------------------------
@@ -334,8 +379,10 @@ class ChatService:
                         session_id
                     )
 
-                    assistant = (
-                        "Perfect. I found vendor options matching your requirements."
+                    assistant = await self.ai_service.build_recommendation_response(
+                        user_message=user_message,
+                        recommendations_exist=True,
+                        filters=filters
                     )
 
                     ConversationService.create_conversation(
