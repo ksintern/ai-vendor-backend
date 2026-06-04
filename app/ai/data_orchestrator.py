@@ -208,6 +208,14 @@ class DataOrchestrator:
 
                         ranked.get(
 
+                            "recommendations",
+
+                            {}
+
+                        )
+
+                        .get(
+
                             "vendors",
 
                             []
