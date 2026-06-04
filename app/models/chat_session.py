@@ -69,6 +69,14 @@ class ChatSession(Base):
 
     )
 
+    title = Column(
+
+        String,
+
+        nullable=True
+
+    )
+
     detected_intent = Column(
 
         String,

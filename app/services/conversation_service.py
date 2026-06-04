@@ -170,3 +170,101 @@ class ConversationService:
 
             .first()
         )
+    
+
+    @staticmethod
+    def get_session_preview(
+        db: Session,
+        session_id: str
+    ):
+
+        first_message = (
+
+            db.query(
+                Conversation
+            )
+
+            .filter(
+                Conversation.session_id == session_id
+            )
+
+            .order_by(
+                Conversation.created_at.asc()
+            )
+
+            .first()
+
+        )
+
+        if not first_message:
+            return "New Conversation"
+
+        return first_message.user_message[:80]
+    
+    @staticmethod
+    def build_user_history_context(
+        db: Session,
+        user_id,
+        limit: int = 10
+    ) -> str:
+
+        conversations = (
+
+            db.query(
+                Conversation
+            )
+
+            .filter(
+                Conversation.user_id == user_id
+            )
+
+            .order_by(
+                Conversation.created_at.desc()
+            )
+
+            .limit(limit)
+
+            .all()
+        )
+
+        conversations.reverse()
+
+        history_parts = []
+
+        for conversation in conversations:
+
+            history_parts.append(
+                f"User: {conversation.user_message}"
+            )
+
+            history_parts.append(
+                f"Assistant: {conversation.ai_response}"
+            )
+
+        return "\n".join(
+            history_parts
+        )
+    
+    @staticmethod
+    def delete_session_conversations(
+        db: Session,
+        session_id: str
+    ):
+
+        (
+
+            db.query(
+                Conversation
+            )
+
+            .filter(
+                Conversation.session_id == session_id
+            )
+
+            .delete(
+                synchronize_session=False
+            )
+
+        )
+
+        db.commit()

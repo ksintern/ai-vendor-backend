@@ -250,3 +250,91 @@ class ChatSessionService:
         return len(
             active_sessions
         )
+    
+    @staticmethod
+    def get_user_sessions(
+        db: Session,
+        user_id,
+        page: int = 1,
+        limit: int = 20
+    ):
+        
+        offset = (
+            (page - 1)
+            * limit
+        )
+
+        return (
+
+            db.query(
+                ChatSession
+            )
+
+            .filter(
+                ChatSession.user_id == user_id
+            )
+
+            .order_by(
+                ChatSession.updated_at.desc()
+            )   
+
+            .offset(
+                offset
+            )
+
+            .limit(
+                limit
+            )
+
+            .all()
+
+        )
+    
+    @staticmethod
+    def update_session_title(
+        db: Session,
+        session_id,
+        title: str
+    ):
+
+        session = (
+            ChatSessionService.get_session(
+                db,
+                session_id
+            )
+        )
+
+        if not session:
+            return None
+
+        session.title = title
+
+        db.commit()
+
+        db.refresh(session)
+
+        return session
+    
+    @staticmethod
+    def delete_session(
+        db: Session,
+        session_id
+    ):
+
+        session = (
+            ChatSessionService.get_session(
+                db,
+                session_id
+            )
+        )
+
+        if not session:
+            return False
+
+        db.delete(
+            session
+        )
+
+        db.commit()
+
+        return True

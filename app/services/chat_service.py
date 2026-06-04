@@ -156,10 +156,26 @@ class ChatService:
                     )
                 )
 
+                user_history_context = (
+                    ConversationService.build_user_history_context(
+                        db=self.db,
+                        user_id=current_user.user_id,
+                        limit=10
+                    )
+                )
+
+                combined_context = f"""
+                CURRENT SESSION:
+                {conversation_context}
+
+                USER HISTORY:
+                {user_history_context}
+                """
+
                 structured = await self.ai_service.build_structured_response(
                     user_message,
                     previous,
-                    conversation_context
+                    combined_context
                 )
 
             except Exception:
