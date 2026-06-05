@@ -52,35 +52,6 @@ class RecommendationFormatter:
         )
 
     @staticmethod
-    def calculate_relevance(vendor):
-
-        rating = getattr(
-            vendor,
-            "avg_rating",
-            0
-        ) or 0
-
-        review_count = getattr(
-            vendor,
-            "review_count",
-            0
-        ) or 0
-
-        score = max(
-            60,
-            min(
-                100,
-                int(
-                    (rating * 20)
-                    +
-                    min(review_count, 20)
-                )
-            )
-        )
-
-        return score
-
-    @staticmethod
     def format_vendor(vendor, filters=None):
 
         filters = filters or {}
@@ -106,6 +77,16 @@ class RecommendationFormatter:
                 if teams
                 else None
             )
+
+        print(
+            "FORMATTER:",
+            vendor.name,
+            getattr(
+                vendor,
+                "match_score",
+                "MISSING"
+            )
+        )
 
         return {
 
@@ -158,10 +139,13 @@ class RecommendationFormatter:
                     filters
                 ),
 
-            "relevance_score":
-                RecommendationFormatter.calculate_relevance(
-                    vendor
-                ),
+            "match_score": int(
+                getattr(
+                    vendor,
+                    "match_score",
+                    0
+                )
+            ),
 
             "featured_badge":
             (
@@ -180,10 +164,10 @@ class RecommendationFormatter:
 
         return [
 
-            RecommendationFormatter.format_vendor(
-                vendor,
-                filters
-            )
+        RecommendationFormatter.format_vendor(
+            vendor,
+            filters
+        )
 
-            for vendor in vendors
-        ]
+        for vendor in vendors
+    ]

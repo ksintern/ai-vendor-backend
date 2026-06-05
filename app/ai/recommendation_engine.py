@@ -201,7 +201,9 @@ class RecommendationEngine:
 
         vendor,
 
-        filters
+        filters,
+
+        context=None
 
     ):
 
@@ -272,6 +274,323 @@ class RecommendationEngine:
             activity_score
 
         )
+    
+    @staticmethod
+    def calculate_budget_relevance(
+        vendor,
+        filters
+    ):
+
+        try:
+            budget = int(filters.get("budget")) if filters.get("budget") is not None else None
+        except (ValueError, TypeError):
+            budget = None
+
+        if not budget:
+            return 30
+
+        min_price = getattr(vendor, "price_min", None) or 0
+        max_price = getattr(vendor, "price_max", None) or 0
+
+        if not min_price or not max_price:
+            return 10
+
+        if min_price <= budget <= max_price:
+            return 30
+
+        if budget > max_price:
+            return 20
+
+        return 0
+
+
+    @staticmethod
+    def calculate_pricing_relevance(
+        vendor,
+        filters
+    ):
+
+        preference = filters.get(
+            "pricing_preference"
+        )
+
+        if not preference:
+            return 25
+
+        text = (
+            f"{vendor.name or ''} "
+            f"{vendor.description or ''}"
+        ).lower()
+
+        keywords = {
+
+            "premium": [
+                "premium",
+                "luxury"
+            ],
+
+            "luxury": [
+                "premium",
+                "luxury"
+            ],
+
+            "budget": [
+                "budget",
+                "cheap",
+                "affordable"
+            ],
+
+            "cheap": [
+                "budget",
+                "cheap",
+                "affordable"
+            ],
+
+            "affordable": [
+                "budget",
+                "cheap",
+                "affordable"
+            ]
+        }
+
+        allowed = keywords.get(
+            preference,
+            []
+        )
+
+        if any(
+            word in text
+            for word in allowed
+        ):
+            return 25
+
+        return 0
+
+
+    @staticmethod
+    def calculate_cuisine_relevance(
+        vendor,
+        filters
+    ):
+
+        cuisine = filters.get(
+            "cuisine"
+        )
+
+        if not cuisine:
+            return 20
+
+        services = []
+
+        for team in getattr(
+            vendor,
+            "managed_teams",
+            []
+        ):
+
+            services.extend(
+                getattr(
+                    team,
+                    "service_records",
+                    []
+                )
+            )
+
+        if not services:
+            return 10
+
+        cuisine = cuisine.lower()
+
+        for service in services:
+
+            service_name = (
+                getattr(
+                    service,
+                    "service_name",
+                    ""
+                )
+                .lower()
+            )
+
+            if cuisine in service_name:
+                return 20
+
+        return 0
+
+
+    @staticmethod
+    def calculate_preference_relevance(
+        vendor,
+        context,
+        filters
+    ):
+
+        preference = context.get(
+            "user_preferences"
+        )
+
+        if not preference:
+            return 15
+
+        score = 0
+
+        preferred_city = getattr(
+            preference,
+            "preferred_city",
+            None
+        )
+
+        preferred_category = getattr(
+            preference,
+            "preferred_category",
+             None
+        )
+
+        preferred_event_type = getattr(
+            preference,
+            "preferred_event_type",
+            None
+        )
+
+    # CITY MATCH
+
+        if (
+            preferred_city
+            and vendor.city
+            and preferred_city.lower()
+            ==
+            vendor.city.lower()
+        ):
+            score += 5
+
+    # CATEGORY MATCH
+
+        if (
+            preferred_category
+            and filters.get("category")
+            and preferred_category.lower()
+            ==
+            filters.get("category").lower()
+        ):
+            score += 7
+
+    # EVENT TYPE MATCH
+
+        if (
+            preferred_event_type
+            and filters.get("event_type")
+            and preferred_event_type.lower()
+            ==
+            filters.get("event_type").lower()
+        ):
+            score += 3
+
+        return score
+
+
+    @staticmethod
+    def calculate_availability_relevance(
+        vendor
+    ):
+
+        available = getattr(
+            vendor,
+            "is_available",
+            None
+        )
+
+        if available is True:
+            return 10
+
+        if available is False:
+            return 0
+
+        return 5
+
+
+    @staticmethod
+    def calculate_relevance_score(
+        vendor,
+        filters,
+        context
+    ):
+
+        return (
+
+            RecommendationEngine
+            .calculate_budget_relevance(
+                vendor,
+                filters
+            )
+
+            +
+
+            RecommendationEngine
+            .calculate_pricing_relevance(
+                vendor,
+                filters
+            )
+
+            +
+
+            RecommendationEngine
+            .calculate_cuisine_relevance(
+                vendor,
+                filters
+            )
+
+            +
+
+            RecommendationEngine
+            .calculate_preference_relevance(
+                vendor,
+                context,
+                filters
+            )
+
+            +
+
+            RecommendationEngine
+            .calculate_availability_relevance(
+                vendor
+            )
+
+        )
+
+
+    @staticmethod
+    def calculate_final_score(
+        vendor,
+        filters,
+        context
+    ):
+
+        relevance_score = (
+            RecommendationEngine
+            .calculate_relevance_score(
+                vendor,
+                filters,
+                context
+            )
+        )
+
+        vendor_score = (
+            RecommendationEngine
+            .calculate_vendor_score(
+                vendor,
+                filters
+            )
+        )
+
+        return (
+
+            relevance_score * 0.60
+
+        ) + (
+
+            vendor_score * 0.40
+
+        )
 
     @staticmethod
     def get_recommendations(
@@ -312,7 +631,9 @@ class RecommendationEngine:
 
                     vendors,
 
-                    filters
+                    filters,
+
+                    context
 
                 )
 
@@ -365,20 +686,16 @@ class RecommendationEngine:
         }
 
     @staticmethod
-    def rank_vendors(vendors, filters):
-    # Fix 3: Exclude root/parent vendors from ranking
-        rankable = [
-            v for v in vendors
-            if getattr(v, "parent_vendor_id", None) is not None
-        ]
+    def rank_vendors(vendors, filters, context):
+        rankable = vendors 
 
-        if not rankable:
-            rankable = vendors  # fallback if filter removes everything
-
-    # Fix 2: Isolate per-vendor scoring so one bad vendor never kills the sort
         def safe_score(vendor):
             try:
-                return RecommendationEngine.calculate_vendor_score(vendor, filters)
+                relevance = RecommendationEngine.calculate_relevance_score(vendor, filters, context)
+                vs = RecommendationEngine.calculate_vendor_score(vendor, filters)
+                final = (relevance * 0.60) + (vs * 0.40)
+                vendor.match_score = round(final)
+                return final
             except Exception as e:
                 print(f"SCORING ERROR for vendor '{getattr(vendor, 'name', '?')}': {e}")
                 return 0

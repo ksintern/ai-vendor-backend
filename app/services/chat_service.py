@@ -366,7 +366,8 @@ class ChatService:
                 context = DataOrchestrator.fetch_context(
                     self.db,
                     intent,
-                    filters
+                    filters,
+                    user_preferences=preference
                 )
 
                 recommendations = (

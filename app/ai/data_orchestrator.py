@@ -52,7 +52,9 @@ class DataOrchestrator:
 
         intent: str,
 
-        filters: dict
+        filters: dict,
+
+        user_preferences=None
 
     ):
 
@@ -139,6 +141,8 @@ class DataOrchestrator:
                 )
 
             )
+
+            raw_context["user_preferences"] = user_preferences
 
         except Exception as e:
 
@@ -234,9 +238,8 @@ class DataOrchestrator:
 
                         }
 
-                except Exception:
-
-                    pass
+                except Exception as e:
+                    print("RECOMMENDATION ERROR:", str(e))
 
         print(
 

@@ -213,7 +213,7 @@ class AIService:
 
                     logger.warning(
 
-                        f"AI retry {attempt + 1} failed: {str(e)}"
+                        f"AI retry {attempt + 1} failed"
 
                     )
 

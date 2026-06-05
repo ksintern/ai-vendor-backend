@@ -55,7 +55,7 @@ class RecommendationCard(
         str
     ] = None
 
-    relevance_score: int = 0
+    match_score: int = 0
 
     featured_badge: Optional[str] = None
 

@@ -509,23 +509,58 @@ def search_vendors(
 
     if category:
 
-        category_pattern = f"%{category}%"
+        category_terms = [category]
+
+        if category.lower() in [
+            "decoration",
+            "decorator",
+            "decorators",
+            "decor"
+        ]:
+            category_terms = [
+                "decoration",
+                "decorators"
+            ]
+
+        elif category.lower() in [
+            "photography",
+            "photographer",
+            "photographers",
+            "photoshoot"
+        ]:
+            category_terms = [
+                "photography"
+            ]
+
+        elif category.lower() in [
+            "catering",
+            "caterer",
+            "caterers",
+            "cater"
+        ]:
+            category_terms = [
+                "catering"
+            ]
 
         search = search.filter(
 
             or_(
 
-                CategoryVendor.name.ilike(
+                *[
+                    CategoryVendor.name.ilike(
+                        f"%{term}%"
+                    )
 
-                    category_pattern
+                    for term in category_terms
+                ],
 
-                ),
+                *[
+                    ServiceAlias.service_name.ilike(
+                        f"%{term}%"
+                    )
 
-                ServiceAlias.service_name.ilike(
-
-                    category_pattern
-
-                )
+                    for term in category_terms
+                ]
 
             )
 
@@ -629,31 +664,6 @@ def search_vendors_ai(
     filters: dict
 
 ):
-    CATEGORY_DB_MAP = {
-
-        "decoration": "decorators",
-
-        "photography": "photography",
-
-        "catering": "catering"
-
-    }
-
-    category = filters.get("category")
-
-    if category:
-
-        filters = {
-
-            **filters,
-
-            "category": CATEGORY_DB_MAP.get(
-                category,
-                category
-            )
-
-        }
-  
     vendors,total=(
 
         search_vendors(
