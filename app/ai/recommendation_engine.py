@@ -305,14 +305,13 @@ class RecommendationEngine:
 
 
     @staticmethod
-    def calculate_pricing_relevance(
-        vendor,
-        filters
-    ):
+    def calculate_pricing_relevance(vendor, filters):
 
-        preference = filters.get(
-            "pricing_preference"
-        )
+        preference = filters.get("pricing_preference")
+
+    # SAFE UNWRAP
+        if isinstance(preference, list):
+            preference = preference[0] if preference else None
 
         if not preference:
             return 25
@@ -419,69 +418,49 @@ class RecommendationEngine:
 
 
     @staticmethod
-    def calculate_preference_relevance(
-        vendor,
-        context,
-        filters
-    ):
+    def calculate_preference_relevance(vendor, context, filters):
 
-        preference = context.get(
-            "user_preferences"
-        )
+        preference = context.get("user_preferences")
 
         if not preference:
             return 15
 
         score = 0
 
-        preferred_city = getattr(
-            preference,
-            "preferred_city",
-            None
-        )
+        preferred_city = getattr(preference, "preferred_city", None)
+        preferred_category = getattr(preference, "preferred_category", None)
+        preferred_event_type = getattr(preference, "preferred_event_type", None)
 
-        preferred_category = getattr(
-            preference,
-            "preferred_category",
-             None
-        )
+    # SAFE UNWRAP - guard against list values from LLM
+        def safe_str(val):
+            if isinstance(val, list):
+                return val[0].lower() if val else None
+            return val.lower() if val else None
 
-        preferred_event_type = getattr(
-            preference,
-            "preferred_event_type",
-            None
-        )
+        category_filter = safe_str(filters.get("category"))
+        event_filter = safe_str(filters.get("event_type"))
 
     # CITY MATCH
-
         if (
             preferred_city
             and vendor.city
-            and preferred_city.lower()
-            ==
-            vendor.city.lower()
+            and preferred_city.lower() == vendor.city.lower()
         ):
             score += 5
 
     # CATEGORY MATCH
-
         if (
             preferred_category
-            and filters.get("category")
-            and preferred_category.lower()
-            ==
-            filters.get("category").lower()
+            and category_filter
+            and preferred_category.lower() == category_filter
         ):
             score += 7
 
     # EVENT TYPE MATCH
-
         if (
             preferred_event_type
-            and filters.get("event_type")
-            and preferred_event_type.lower()
-            ==
-            filters.get("event_type").lower()
+            and event_filter
+            and preferred_event_type.lower() == event_filter
         ):
             score += 3
 

@@ -787,7 +787,10 @@ def search_vendors_ai(
             print("AFTER PRICING FILTER - total:", total)
 
             # Prefer keyword-matched vendors, but fall back to all vendors
-            vendors = matched if matched else unmatched
+            if matched:
+
+                vendors = matched + unmatched
+
             total = len(vendors)
 
     return {
@@ -852,32 +855,24 @@ def top_rated_vendors_ai(
     return vendors
 
 
-def vendor_by_name_ai(
+def vendor_by_name_ai(db: Session, name: str):
+    result = db.query(Vendor).filter(
+        Vendor.name.ilike(f"%{name}%")
+    ).first()
 
-    db: Session,
+    if result:
+        return result
+    
+    words = [w for w in name.strip().split() if len(w) > 2][:2]
+    if words:
+        for word in words:
+            result = db.query(Vendor).filter(
+                Vendor.name.ilike(f"%{word}%")
+            ).first()
+            if result:
+                return result
 
-    name:str
-
-):
-
-    return (
-
-        db.query(Vendor)
-
-        .filter(
-
-            Vendor.name.ilike(
-
-                f"%{name}%"
-
-            )
-
-        )
-
-        .first()
-
-    )
-
+    return None
 
 def compare_vendors_ai(
 

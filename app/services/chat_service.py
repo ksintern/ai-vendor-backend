@@ -12,6 +12,7 @@ from app.services.chat_session_service import ChatSessionService
 from app.services.conversation_service import ConversationService
 from app.services.recommendation_history_service import RecommendationHistoryService
 from app.services.user_preference_service import UserPreferenceService
+from app.graphs.graph_service import GraphService
 
 from app.schemas.chat_schema import ChatRequest
 
@@ -48,6 +49,7 @@ class ChatService:
     def __init__(self, db: Session):
         self.db = db
         self.ai_service = AIService()
+        self.graph_service = GraphService()
 
     async def process_message(
         self,
@@ -125,7 +127,23 @@ class ChatService:
                 for term in self.SERVICE_TERMS
             )
 
-            if remembered and service_request:
+            comparison_keywords = [
+                "compare",
+                "comparison",
+                "vs",
+                "versus"
+            ]
+
+            is_comparison = any(
+                word in lower
+                for word in comparison_keywords
+            )
+
+            if (
+                remembered
+                and service_request
+                and not is_comparison
+            ):
 
                 assistant = self._service_reply(remembered)
 
@@ -188,14 +206,6 @@ class ChatService:
             filters = structured.get("filters", {})
             intent = structured.get("intent")
 
-            if (
-                previous
-                and filters
-                and intent == "comparison_query"
-            ):
-
-                intent = "vendor_recommendation"
-
             filters = {
                 k: v
                 for k, v in filters.items()
@@ -241,8 +251,10 @@ class ChatService:
 
             if missing:
                 missing = missing[0]
-            else:
+            elif intent != "comparison_query":          # ← add this condition
                 missing = self._find_missing(filters)
+            else:
+                missing = None     
 
             recommendations = []
 
@@ -250,8 +262,8 @@ class ChatService:
             # FOLLOWUP FLOW
             # -----------------------------------
 
-            if missing:
-
+            if missing and intent != "comparison_query": 
+                
                 missing_fields = (
                     [missing]
                     if isinstance(missing, str)
@@ -363,22 +375,51 @@ class ChatService:
                     #         preference.preferred_min_rating
                     #     )   
                 
-                context = DataOrchestrator.fetch_context(
-                    self.db,
-                    intent,
-                    filters,
-                    user_preferences=preference
-                )
+                USE_REASONING_GRAPH = True
 
-                recommendations = (
-                    context.get(
-                        "recommendations",
-                        {}
-                    ).get(
-                        "vendors",
-                        []
+                if USE_REASONING_GRAPH:
+
+                    graph_result = await self.graph_service.process(
+                        query=user_message,
+                        session_id=session_id,
+                        user_id=str(current_user.user_id),
+                        db=self.db
                     )
-                )
+
+                    recommendations = (
+                        graph_result.get(
+                            "ranked_vendors",
+                            []
+                        )
+                    )
+
+                    graph_response = (
+                        graph_result.get(
+                            "ai_response",
+                            ""
+                        )
+                    )
+
+                else:
+
+                    context = DataOrchestrator.fetch_context(
+                        self.db,
+                        intent,
+                        filters,
+                        user_preferences=preference
+                    )
+
+                    recommendations = (
+                        context.get(
+                            "recommendations",
+                            {}
+                        ).get(
+                            "vendors",
+                            []
+                        )
+                    )
+
+                    graph_response = None
 
                 # -----------------------------------
                 # RECOMMENDATION FLOW
@@ -396,7 +437,13 @@ class ChatService:
                         session_id
                     )
 
-                    assistant = await self.ai_service.build_recommendation_response(
+                    if USE_REASONING_GRAPH and graph_response:
+
+                        assistant = graph_response
+
+                    else:
+
+                        assistant = await self.ai_service.build_recommendation_response(
                         user_message=user_message,
                         recommendations_exist=True,
                         filters=filters

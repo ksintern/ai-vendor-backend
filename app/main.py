@@ -51,6 +51,9 @@ from app.api.routes.query import (
 
 from app.api.routes.session import router as session_router
 
+from app.api.routes.reasoning_test import (
+    router as reasoning_router
+)
 
 # =====================================
 # EXCEPTION HANDLERS
@@ -348,4 +351,8 @@ app.include_router(
 
 app.include_router(
     session_router
+)
+
+app.include_router(
+    reasoning_router
 )

@@ -190,26 +190,6 @@ class IntentExtractor:
         confidence = 0.70
 
         # ----------------------------------
-        # SERVICE QUERY
-        # ----------------------------------
-
-        if filters.get(
-            "service_request"
-        ):
-
-            return {
-
-                "intent":
-                "service_query",
-
-                "secondary_intents":
-                secondary_intents,
-
-                "confidence":
-                0.98
-            }
-
-        # ----------------------------------
         # COMPARISON QUERY
         # ----------------------------------
 
@@ -257,6 +237,26 @@ class IntentExtractor:
                     "confidence":
                     0.99
                 }
+
+        # ----------------------------------
+        # SERVICE QUERY
+        # ----------------------------------
+
+        if filters.get(
+            "service_request"
+        ):
+
+            return {
+
+                "intent":
+                "service_query",
+
+                "secondary_intents":
+                secondary_intents,
+
+                "confidence":
+                0.98
+            }
 
         # ----------------------------------
         # QUALITY QUERY

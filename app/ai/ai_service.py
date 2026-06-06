@@ -83,7 +83,7 @@ class AIService:
 
     TEMPERATURE = 0.7
 
-    MAX_OUTPUT_TOKENS = 200
+    MAX_OUTPUT_TOKENS = 500
 
     def __init__(
 
@@ -426,13 +426,42 @@ class AIService:
                 "vendor_recommendation"
             )
         )
+        
+        intent_filters = (
+            intent_data.get(
+                "filters",
+                {}
+            )
+        )
+
+        final_filters = {
+            **parser_filters
+        }
+
+        if intent_filters.get(
+            "vendor_names"
+        ):
+            final_filters[
+                "vendor_names"
+            ] = intent_filters[
+                "vendor_names"
+            ]
+
+        if intent_filters.get(
+            "comparison_request"
+        ):
+            final_filters[
+                "comparison_request"
+            ] = intent_filters[
+                "comparison_request"
+            ]
 
         # -----------------------------------
         # MERGE FILTERS
         # -----------------------------------
 
         final_filters = {
-            **parser_filters
+            **final_filters
         }
 
         if llm_filters:
@@ -544,7 +573,7 @@ class AIService:
 
         filters: dict
 
-    ):
+    ) -> str:
 
         # -----------------------------------
         # NO VENDORS
