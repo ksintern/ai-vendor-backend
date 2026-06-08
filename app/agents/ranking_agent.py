@@ -18,6 +18,12 @@ class RankingAgent:
                 []
             )
 
+            if not vendors:
+
+                state["ranked_vendors"] = []
+
+                return state
+
             print(
                 "RANKING AGENT INPUT:",
                 len(vendors)

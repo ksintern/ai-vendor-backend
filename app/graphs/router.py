@@ -45,3 +45,17 @@ def route_from_supervisor(
         return "response"
 
     return "response"
+
+def route_after_tool_calling(
+    state: AgentState
+):
+
+    intent = state.get(
+        "intent",
+        ""
+    )
+
+    if intent == "session_query":
+        return "response"
+
+    return "ranking"

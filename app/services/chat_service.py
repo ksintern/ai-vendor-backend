@@ -319,30 +319,28 @@ class ChatService:
                 # -----------------------------------
 
                 if not intent:
-                    intent = (
-                        IntentExtractor.extract(user_message)
-                        .get(
-                            "intent",
-                            "vendor_recommendation"
-                        )
-                    )
+                    intent = "vendor_recommendation"
 
                 # -----------------------------------
                 # DATABASE CONTEXT
                 # -----------------------------------
 
-                UserPreferenceService.learn_from_chat(
-                    db=self.db,
-                    user_id=current_user.user_id,
-                    filters=filters
-                )
+                preference = None
 
-                preference = (
-                    UserPreferenceService.get_user_preferences(
+                if intent != "session_query":
+
+                    UserPreferenceService.learn_from_chat(
                         db=self.db,
-                        user_id=current_user.user_id
+                        user_id=current_user.user_id,
+                        filters=filters
                     )
-                )
+
+                    preference = (
+                        UserPreferenceService.get_user_preferences(
+                            db=self.db,
+                            user_id=current_user.user_id
+                        )
+                    )
 
                 if preference:
 
@@ -388,7 +386,10 @@ class ChatService:
                         session_id=session_id,
                         user_id=str(current_user.user_id),
                         access_token=current_user.access_token,
-                        db=self.db
+                        db=self.db,
+                        intent=intent,        # ← pass already-extracted intent
+                        filters=filters,
+                        structured=structured        # ← pass already-extracted filters
                     )
 
                     recommendations = (

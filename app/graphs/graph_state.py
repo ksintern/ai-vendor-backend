@@ -61,6 +61,8 @@ class AgentState(TypedDict, total=False):
     session_context: Dict[str, Any]
     
     query_analysis: Dict[str, Any]
+
+    structured: Dict[str, Any]
     
     # -----------------------------------
     # COMPARISON

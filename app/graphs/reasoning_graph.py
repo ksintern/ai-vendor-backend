@@ -4,7 +4,10 @@ from langgraph.graph import (
 )
 
 from app.graphs.graph_state import AgentState
-from app.graphs.router import route_from_supervisor
+from app.graphs.router import (
+    route_from_supervisor,
+    route_after_tool_calling
+)
 
 from app.agents.supervisor_agent import SupervisorAgent
 from app.agents.context_agent import ContextAgent
@@ -127,10 +130,15 @@ class ReasoningGraph:
             }
         )
 
-        workflow.add_edge(
+        workflow.add_conditional_edges(
             "tool_calling",
-            "ranking"
+            route_after_tool_calling,
+            {
+                "ranking": "ranking",
+                "response": "response"
+            }
         )
+
 
         workflow.add_edge(
             "ranking",
