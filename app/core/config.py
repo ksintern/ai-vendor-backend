@@ -71,6 +71,12 @@ class Settings(
 
     AI_TIMEOUT: int = 45
 
+    # -----------------------------
+    # INTERNAL API
+    # -----------------------------
+
+    API_BASE_URL: str = "http://localhost:8000"
+
 
     # -----------------------------
     # ENV

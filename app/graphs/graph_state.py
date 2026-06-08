@@ -13,16 +13,15 @@ class AgentState(TypedDict, total=False):
     # -----------------------------------
     # REQUEST
     # -----------------------------------
-
     query: str
     session_id: str
     user_id: str
     db: Session
+    access_token: str | None
 
     # -----------------------------------
     # ROUTING
     # -----------------------------------
-
     intent: str
     secondary_intents: List[str]
     confidence: float
@@ -30,15 +29,22 @@ class AgentState(TypedDict, total=False):
     # -----------------------------------
     # QUERY ANALYSIS
     # -----------------------------------
-
     filters: Dict[str, Any]
     validation: Dict[str, Any]
     search_payload: Dict[str, Any]
 
     # -----------------------------------
+    # TOOL CALLING
+    # -----------------------------------
+    tool_name: str
+    tool_input: Dict[str, Any]
+    tool_output: Dict[str, Any]
+    tool_status: Optional[str]
+    tool_error: Optional[str]
+
+    # -----------------------------------
     # CONTEXT
     # -----------------------------------
-
     conversation_context: str
     user_preferences: Dict[str, Any]
     context: Dict[str, Any]
@@ -46,14 +52,19 @@ class AgentState(TypedDict, total=False):
     # -----------------------------------
     # VENDOR DATA
     # -----------------------------------
+    vendors: List[Any]
+    ranked_vendors: List[Any]
 
-    vendors: List[Dict[str, Any]]
-    ranked_vendors: List[Dict[str, Any]]
-
+    # -----------------------------------
+    # SESSION DATA
+    # -----------------------------------
+    session_context: Dict[str, Any]
+    
+    query_analysis: Dict[str, Any]
+    
     # -----------------------------------
     # COMPARISON
     # -----------------------------------
-
     comparison_result: Dict[str, Any]
 
     # -----------------------------------
@@ -64,13 +75,11 @@ class AgentState(TypedDict, total=False):
     # -----------------------------------
     # WORKFLOW
     # -----------------------------------
-
     current_agent: str
     workflow_trace: List[Dict[str, Any]]
 
     # -----------------------------------
     # ERROR HANDLING
     # -----------------------------------
-
     errors: List[str]
     retry_count: int

@@ -251,7 +251,7 @@ class ChatService:
 
             if missing:
                 missing = missing[0]
-            elif intent != "comparison_query":          # ← add this condition
+            elif intent not in ("comparison_query", "session_query"):
                 missing = self._find_missing(filters)
             else:
                 missing = None     
@@ -262,7 +262,7 @@ class ChatService:
             # FOLLOWUP FLOW
             # -----------------------------------
 
-            if missing and intent != "comparison_query": 
+            if missing and intent not in ("comparison_query", "session_query"):
                 
                 missing_fields = (
                     [missing]
@@ -308,8 +308,11 @@ class ChatService:
                 )
 
             else:
-
-                response_type = "recommendation"
+                response_type = (
+                    "session"
+                    if intent == "session_query"
+                    else "recommendation"
+                )
 
                 # -----------------------------------
                 # FALLBACK INTENT
@@ -374,7 +377,8 @@ class ChatService:
                     #     filters["rating"] = (
                     #         preference.preferred_min_rating
                     #     )   
-                
+                graph_intent = intent
+                graph_response = None
                 USE_REASONING_GRAPH = True
 
                 if USE_REASONING_GRAPH:
@@ -383,6 +387,7 @@ class ChatService:
                         query=user_message,
                         session_id=session_id,
                         user_id=str(current_user.user_id),
+                        access_token=current_user.access_token,
                         db=self.db
                     )
 
@@ -399,6 +404,8 @@ class ChatService:
                             ""
                         )
                     )
+
+                    graph_intent = graph_result.get("intent", intent) 
 
                 else:
 
@@ -420,12 +427,38 @@ class ChatService:
                     )
 
                     graph_response = None
+                    graph_intent = intent
+
+                # -----------------------------------
+                # SESSION QUERY RESPONSE
+                # ← NEW BLOCK — handles session_query
+                # before the recommendations check
+                # -----------------------------------
+                if graph_intent == "session_query":
+
+                    assistant = (
+                        graph_response
+                        if graph_response
+                        else "I retrieved your session but no context was found."
+                    )
+
+                    ConversationService.create_conversation(
+                        db=self.db,
+                        session_id=session_id,
+                        user_id=current_user.user_id,
+                        user_message=user_message,
+                        ai_response=assistant,
+                        detected_intent=graph_intent,
+                        applied_filters=filters,
+                        is_follow_up=False,
+                        context_summary="Session context retrieved"
+                    )
 
                 # -----------------------------------
                 # RECOMMENDATION FLOW
                 # -----------------------------------
 
-                if recommendations:
+                elif recommendations:
 
                     SessionManager.set_vendor_memory(
                         session_id,
@@ -482,8 +515,11 @@ class ChatService:
                     )
 
                     assistant = (
-                        "Sorry, I couldn't find matching vendors."
+                        graph_response
+                        if graph_response
+                        else "Sorry, I couldn't find matching vendors."
                     )
+
 
                     ConversationService.create_conversation(
                         db=self.db,

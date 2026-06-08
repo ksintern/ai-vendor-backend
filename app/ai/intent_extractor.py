@@ -86,6 +86,19 @@ class IntentExtractor:
 
     }
 
+    SESSION = {
+
+        "history",
+        "previous",
+        "earlier",
+        "conversation",
+        "context",
+        "session",
+        "chat",
+        "discussed",
+        "before"
+    }
+
     SERVICE = {
 
         "service",
@@ -416,6 +429,27 @@ class IntentExtractor:
 
                 "confidence":
                 0.90
+            }
+        
+        # ----------------------------------
+        # SESSION QUERY
+        # ----------------------------------
+
+        if tokens & (
+            IntentExtractor
+            .SESSION
+        ):
+
+            return {
+
+                "intent":
+                "session_query",
+
+                "secondary_intents":
+                secondary_intents,
+
+                "confidence":
+                0.95
             }
 
         # ----------------------------------

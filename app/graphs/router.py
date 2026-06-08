@@ -20,7 +20,9 @@ def route_from_supervisor(
 
         "pricing_query",
 
-        "service_query"
+        "service_query",
+
+        "session_query"
 
     ]:
 

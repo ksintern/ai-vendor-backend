@@ -9,11 +9,12 @@ from app.graphs.router import route_from_supervisor
 from app.agents.supervisor_agent import SupervisorAgent
 from app.agents.context_agent import ContextAgent
 from app.agents.query_analysis_agent import QueryAnalysisAgent
-from app.agents.discovery_agent import DiscoveryAgent
 from app.agents.comparison_agent import ComparisonAgent
 from app.agents.ranking_agent import RankingAgent
 from app.agents.response_agent import ResponseAgent
 from app.agents.error_agent import ErrorAgent
+from app.agents.tool_calling_agent import ToolCallingAgent
+
 
 def route_after_analysis(
     state: AgentState
@@ -60,8 +61,8 @@ class ReasoningGraph:
         )
 
         workflow.add_node(
-            "discovery",
-            DiscoveryAgent.execute
+            "tool_calling",
+            ToolCallingAgent().execute
         )
 
         workflow.add_node(
@@ -122,13 +123,12 @@ class ReasoningGraph:
                 "comparison":
                 "comparison",
 
-                "discovery":
-                "discovery"
+                "discovery": "tool_calling"
             }
         )
 
         workflow.add_edge(
-            "discovery",
+            "tool_calling",
             "ranking"
         )
 

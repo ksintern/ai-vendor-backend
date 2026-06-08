@@ -1,8 +1,9 @@
 from app.graphs.graph_state import (
     AgentState
 )
-
-
+from app.ai.recommendation_engine import (
+    RecommendationEngine
+)
 class RankingAgent:
 
     @staticmethod
@@ -25,14 +26,36 @@ class RankingAgent:
             print(
                 "RANKING AGENT VENDORS:",
                 [
-                    v.name if hasattr(v, "name")
-                    else str(v)
+                    v.get("name")
+                    if isinstance(v, dict)
+                    else getattr(v, "name", str(v))
                     for v in vendors
                 ]
             )
 
+            filters = state.get(
+                "filters",
+                {}
+            )
+
+            context = {
+                "user_preferences":
+                state.get(
+                    "user_preferences"
+                )
+            }
+
+            ranked = (
+                RecommendationEngine
+                .rank_vendors(
+                    vendors,
+                    filters,
+                    context
+                )
+            )
+
             state["ranked_vendors"] = (
-                vendors
+                ranked
             )
 
             state["current_agent"] = (
@@ -53,7 +76,7 @@ class RankingAgent:
                     "success",
 
                     "vendors_ranked":
-                    len(vendors)
+                    len(ranked)
                 }
             )
 

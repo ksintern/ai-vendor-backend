@@ -11,6 +11,7 @@ class GraphService:
         query: str,
         session_id: str,
         user_id: str,
+        access_token: str | None,
         db
     ):
 
@@ -21,6 +22,8 @@ class GraphService:
             "session_id": session_id,
 
             "user_id": user_id,
+
+            "access_token": access_token,
 
             "db": db,
 

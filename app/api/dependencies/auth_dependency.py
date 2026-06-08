@@ -169,6 +169,8 @@ def get_current_user(
 
     )
 
+    user.access_token = token
+
     return user
 
 
