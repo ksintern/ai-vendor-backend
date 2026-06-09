@@ -434,11 +434,19 @@ class IntentExtractor:
         # ----------------------------------
         # SESSION QUERY
         # ----------------------------------
-
-        if tokens & (
-            IntentExtractor
-            .SESSION
-        ):
+        SESSION_STRONG = {
+            "history",
+            "previous",
+            "earlier",
+            "discussed",
+            "before",
+            "last time",
+            "we talked",
+            "you said",
+            "remember"
+        }
+        
+        if tokens & SESSION_STRONG:
 
             return {
 

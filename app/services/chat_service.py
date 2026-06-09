@@ -1,4 +1,5 @@
 import uuid
+import time
 
 from sqlalchemy.orm import Session
 
@@ -56,6 +57,8 @@ class ChatService:
         payload: ChatRequest,
         current_user
     ):
+        
+        start_time = time.time()
 
         ChatSessionService.expire_old_sessions(
             self.db
@@ -182,13 +185,14 @@ class ChatService:
                     )
                 )
 
-                combined_context = f"""
-                CURRENT SESSION:
-                {conversation_context}
+                # Trim context to prevent Ollama from hanging on large inputs
+                conversation_context_trimmed = conversation_context[:500] if conversation_context else ""
+                user_history_trimmed = user_history_context[:300] if user_history_context else ""
 
-                USER HISTORY:
-                {user_history_context}
-                """
+                combined_context = (
+                    f"CURRENT SESSION:\n{conversation_context_trimmed}\n\n"
+                    f"USER HISTORY:\n{user_history_trimmed}"
+                ).strip()
 
                 structured = await self.ai_service.build_structured_response(
                     user_message,
@@ -387,9 +391,8 @@ class ChatService:
                         user_id=str(current_user.user_id),
                         access_token=current_user.access_token,
                         db=self.db,
-                        intent=intent,        # ← pass already-extracted intent
-                        filters=filters,
-                        structured=structured        # ← pass already-extracted filters
+                        intent=intent,       
+                        filters=filters,    
                     )
 
                     recommendations = (
@@ -548,6 +551,10 @@ class ChatService:
             # FINAL RESPONSE
             # -----------------------------------
 
+            print(
+                f"TOTAL REQUEST TIME: {round(time.time() - start_time, 2)}s"
+            )
+
             return {
                 "success": True,
                 "message": assistant,
@@ -576,6 +583,10 @@ class ChatService:
             print(
                 "CHAT ERROR:",
                 str(e)
+            )
+
+            print(
+                f"TOTAL REQUEST TIME: {round(time.time() - start_time, 2)}s"
             )
 
             return {

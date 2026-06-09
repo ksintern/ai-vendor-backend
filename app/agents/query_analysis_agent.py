@@ -8,7 +8,8 @@ SKIP_ANALYSIS_INTENTS = {
     "session_query",
     "query_understanding",
     "greeting",
-    "chitchat"
+    "chitchat",
+    "comparison_query"
 }
 
 class QueryAnalysisAgent:
@@ -44,50 +45,8 @@ class QueryAnalysisAgent:
 
             # ---------------------------------
             # OPTIMIZATION 2
-            # Use structured result already
-            # computed in chat_service upstream
-            # Zero LLM calls in this case
-            # ---------------------------------
-
-            upstream_structured = state.get("structured", {})
-
-            if upstream_structured:
-
-                logger.debug(
-                    "[QueryAnalysisAgent] Using upstream structured "
-                    "result — skipping LLM call"
-                )
-
-                existing_filters = state.get("filters", {})
-                new_filters = upstream_structured.get("filters", {})
-
-                merged_filters = {
-                    **new_filters,
-                    **existing_filters  # existing take priority
-                }
-                merged_filters = {
-                    k: v for k, v in merged_filters.items()
-                    if v is not None
-                }
-
-                state["filters"] = merged_filters
-                state["validation"] = upstream_structured.get("validation", {})
-                state["search_payload"] = upstream_structured.get("search_payload", {})
-                state["current_agent"] = "query_analysis_agent"
-
-                workflow = state.get("workflow_trace", [])
-                workflow.append({
-                    "agent": "query_analysis_agent",
-                    "status": "used_upstream",
-                    "reason": "structured result passed from chat_service"
-                })
-                state["workflow_trace"] = workflow
-                return state
-
-            # ---------------------------------
-            # OPTIMIZATION 3
             # Filters already complete —
-            # skip LLM extraction
+            # skip LLM extraction entirely
             # ---------------------------------
 
             existing_filters = state.get("filters", {})
@@ -104,7 +63,7 @@ class QueryAnalysisAgent:
                 workflow.append({
                     "agent": "query_analysis_agent",
                     "status": "skipped",
-                    "reason": "filters already populated"
+                    "reason": "filters already populated from chat_service"
                 })
                 state["workflow_trace"] = workflow
                 state["current_agent"] = "query_analysis_agent"
@@ -112,10 +71,8 @@ class QueryAnalysisAgent:
 
             # ---------------------------------
             # FULL LLM ANALYSIS
-            # Only reaches here if:
-            # - intent needs analysis
-            # - no upstream structured result
-            # - filters incomplete
+            # Only reaches here if filters
+            # are genuinely incomplete
             # ---------------------------------
 
             logger.debug(
@@ -131,9 +88,10 @@ class QueryAnalysisAgent:
             )
 
             new_filters = structured.get("filters", {})
+
             merged_filters = {
                 **new_filters,
-                **existing_filters
+                **existing_filters  # existing always take priority
             }
             merged_filters = {
                 k: v for k, v in merged_filters.items()

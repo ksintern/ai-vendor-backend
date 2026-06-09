@@ -83,7 +83,7 @@ class AIService:
 
     TEMPERATURE = 0.7
 
-    MAX_OUTPUT_TOKENS = 500
+    MAX_OUTPUT_TOKENS = 250
 
     def __init__(
 
@@ -184,6 +184,8 @@ class AIService:
                 self.MAX_RETRIES + 1
 
             ):
+                
+                print("== AI CALL START ==")
 
                 try:
 
@@ -208,6 +210,8 @@ class AIService:
                     )
 
                     break
+
+                    print("== AI CALL END ==")
 
                 except Exception as e:
 
@@ -258,6 +262,7 @@ class AIService:
                 2
 
             )
+            print(f"AI LATENCY: {latency} ms")
 
             result = {
 
@@ -372,60 +377,37 @@ class AIService:
         # PROMPT CHAIN
         # -----------------------------------
 
-        chain = (
-            PromptChain.build(
-                normalized_query,
-                previous or {}
-            )
-        )
+        chain = PromptChain.build(normalized_query, previous or {})
+
+# Intent extracted BEFORE context injection ← FIX
+        intent_data = IntentExtractor.extract(normalized_query)
+        intent = intent_data.get("intent", "vendor_recommendation")
+        intent_filters = intent_data.get("filters", {})
 
         if conversation_context:
-
             normalized_query = (
-                f"Conversation Context:\n"
+                f"Prior Messages:\n"
                 f"{conversation_context}\n\n"
-                f"Current User Query:\n"
+                f"New Query:\n"
                 f"{normalized_query}"
             )
 
-        # -----------------------------------
-        # LLM FILTERS
-        # -----------------------------------
-
         llm_filters = {}
-
-        for step in chain:
-
-            if (
-                step["stage"]
-                ==
-                "filter_extraction"
-            ):
-
-                llm_filters = await (
-                    self._extract_llm_filters(
-                        normalized_query
+        has_category = bool(parser_filters.get("category"))
+        has_city = bool(parser_filters.get("city"))
+        if not (has_category and has_city) and intent != "comparison_query":
+            for step in chain:
+                if (
+                    step["stage"]
+                    ==
+                    "filter_extraction"
+                ):
+                    llm_filters = await (
+                        self._extract_llm_filters(
+                            normalized_query
+                        )
                     )
-                )
-
-                break
-
-        # -----------------------------------
-        # INTENT
-        # -----------------------------------
-
-        intent_data = (
-            IntentExtractor.extract(
-                normalized_query
-            )
-        )
-
-        intent = (
-            intent_data.get(
-                "intent",
-                "vendor_recommendation"
-            )
-        )
+                    break
         
         intent_filters = (
             intent_data.get(
