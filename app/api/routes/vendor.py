@@ -4,7 +4,10 @@ from fastapi import (
 
     APIRouter,
     Depends,
-    Query
+    Query,
+    UploadFile,
+    File,
+    HTTPException
 
 )
 
@@ -23,7 +26,9 @@ from app.schemas.vendor_schema import (
 
     VendorProfileUpdateRequest,
     VendorDetailResponse,
-    VendorListResponse
+    VendorListResponse,
+    VendorImportRequest,
+    VendorImportResponse
 
 )
 
@@ -40,13 +45,22 @@ from app.services.vendor_service import (
     rename_vendor_service,
     get_single_service_service,
     rename_service_service,
-    delete_service_service
+    delete_service_service,
+    import_vendors_service,
+    import_vendors_from_file_service
 
 )
 
 from app.services.user_preference_service import (
     UserPreferenceService
 )
+
+from app.services.recommendation_history_service import (
+    RecommendationHistoryService
+)
+
+from app.ai.recommendation_engine import RecommendationEngine
+from app.ai.recommendation_formatter import RecommendationFormatter
 
 from app.api.dependencies.auth_dependency import (
 
@@ -2319,36 +2333,89 @@ def get_recommendations_api(
 
 ):
 
-    vendors=(
-
-        db.query(
-            Vendor
+    preference = (
+        UserPreferenceService.get_user_preferences(
+            db=db,
+            user_id=current_user.user_id
         )
-
-        .filter(
-            Vendor.is_active==True
-        )
-
-        .order_by(
-            desc(
-                Vendor.avg_rating
-            )
-        )
-
-        .limit(
-            10
-        )
-
-        .all()
-
     )
 
+
+    query = (
+        db.query(Vendor)
+        .filter(Vendor.is_active == True)
+        .filter(Vendor.parent_vendor_id == None)
+    )
+
+    if preference:
+
+        if bool(preference.preferred_city):
+            city_test = query.filter(
+                Vendor.city.ilike(
+                    f"%{preference.preferred_city}%"
+                )
+            ).all()
+            if city_test:
+                query = query.filter(
+                    Vendor.city.ilike(
+                        f"%{preference.preferred_city}%"
+                    )
+                )
+
+        if bool(preference.preferred_min_rating):
+            query = query.filter(
+                Vendor.avg_rating >= preference.preferred_min_rating
+            )
+    # Step 4 — Order by rating and get top 20
+    vendors = (
+        query
+        .order_by(desc(Vendor.avg_rating))
+        .limit(20)
+        .all()
+    )
+
+    recent_ids = RecommendationHistoryService.get_recent_vendor_ids(
+        db=db,
+        user_id=current_user.user_id,
+        limit=50
+    )
+
+    filtered = [
+        v for v in vendors
+        if str(v.vendor_id) not in [str(r) for r in recent_ids]
+    ]
+
+    if not filtered:
+        filtered = vendors
+
+    context = {"vendors": filtered, "user_preferences": preference}
+    category_filter = str(preference.preferred_category) if preference and getattr(preference, "preferred_category", None) else ""
+    budget_filter = getattr(preference, "preferred_price_range", None)
+
+    ranked = RecommendationEngine.rank_vendors(
+        filtered,
+        {   
+            "category": category_filter,
+            "budget": int(budget_filter) if budget_filter else None
+        },
+        context
+    )
+    final = ranked[:10]
+
+    for vendor in final:
+        try:
+            RecommendationHistoryService.create_recommendation_record(
+                db=db,
+                user_id=current_user.user_id,
+                session_id=None,
+                vendor_id=vendor.vendor_id
+            )
+        except Exception:
+            db.rollback()
+
     return {
-
-        "vendors":
-
-        vendors
-
+        "success": True,
+        "recommendations": RecommendationFormatter.format_vendors(final)
     }
 # ==========================================
 # USER PREFERENCES
@@ -2412,7 +2479,7 @@ def get_my_preferences_api(
                     str(
                         preference.favorite_vendor_id
                     )
-                    if preference.favorite_vendor_id
+                    if preference.favorite_vendor_id is not None
                     else None
                 )
         }
@@ -2504,11 +2571,80 @@ def update_my_preferences_api(
                     str(
                         preference.favorite_vendor_id
                     )
-                    if preference.favorite_vendor_id
+                    if preference.favorite_vendor_id is not None
                     else None
                 )
         }
     }
+
+# ==========================================
+# ALL DISTINCT CATEGORIES
+# ==========================================
+
+@router.get(
+    "/categories"
+)
+def get_all_categories_api(
+    db: Session = Depends(get_db)
+):
+    rows = (
+        db.query(Vendor.name)
+        .filter(Vendor.parent_vendor_id.isnot(None))
+        .filter(Vendor.is_active == True)
+        .distinct()
+        .all()
+    )
+
+    seen = set()
+    categories = []
+
+    for (name,) in rows:
+        if not name:
+            continue
+
+        normalized = name.strip().lower()
+
+        if normalized and normalized not in seen:
+            seen.add(normalized)
+            categories.append(name.strip())
+
+    categories.sort()
+
+    return {
+        "categories": categories
+    }
+
+@router.get("/suggestions")
+def get_suggestions(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(
+        require_role(["vendor"])
+    )
+):
+    preference = UserPreferenceService.get_user_preferences(
+        db=db,
+        user_id=current_user.user_id
+    )
+    suggestions = []
+    if preference:
+        cat = getattr(preference, "preferred_category", None)
+        city = getattr(preference, "preferred_city", None)
+        budget = getattr(preference, "preferred_price_range", None)
+        if cat and city:
+            suggestions.append(f"{cat.title()} vendors in {city.title()}")
+        if cat and budget:
+            suggestions.append(f"{cat.title()} under ₹{budget}")
+        if city:
+            suggestions.append(f"Top rated vendors in {city.title()}")
+        if cat:
+            suggestions.append(f"Best {cat.title()} vendors")
+    if not suggestions:
+        suggestions = [
+            "Wedding in Delhi under 5L",
+            "Caterers for 200 guests",
+            "Photographers in Mumbai"
+        ]
+    return {"suggestions": suggestions[:4]}
 
 # ==========================================
 # SINGLE
@@ -2614,3 +2750,201 @@ def deactivate_vendor_api(
         vendor_id=vendor_id
 
     )
+
+# ==========================================
+# IMPORT VENDORS
+# ==========================================
+
+@router.post(
+    "/import",
+    response_model=VendorImportResponse
+)
+def import_vendors_api(
+
+    payload: VendorImportRequest,
+
+    db: Session = Depends(get_db),
+
+    current_user: User = Depends(
+        require_role(["admin"])
+    )
+
+):
+
+    return import_vendors_service(
+        db=db,
+        vendors_data=payload.vendors
+    )
+
+# ==========================================
+# IMPORT VENDORS FROM CSV / EXCEL FILE
+# ==========================================
+
+@router.post(
+    "/import-file",
+    response_model=VendorImportResponse
+)
+async def import_vendors_file_api(
+
+    file: UploadFile = File(...),
+
+    db: Session = Depends(get_db),
+
+    current_user: User = Depends(
+        require_role(["admin"])
+    )
+
+):
+
+    return await import_vendors_from_file_service(
+        db=db,
+        file=file
+    )
+
+# ==========================================
+# VERIFY / UNVERIFY VENDOR
+# ==========================================
+
+@router.patch(
+    "/{vendor_id}/verify"
+)
+def toggle_verify_vendor_api(
+
+    vendor_id: UUID,
+
+    db: Session = Depends(get_db),
+
+    current_user: User = Depends(
+        require_role(["admin"])
+    )
+
+):
+
+    from app.repositories.vendor_repository import get_vendor_by_id
+
+    vendor = get_vendor_by_id(db, vendor_id)
+
+    if not vendor:
+        raise HTTPException(
+            status_code=404,
+            detail="Vendor not found"
+        )
+
+    vendor.is_verified = not vendor.is_verified
+
+    db.commit()
+
+    db.refresh(vendor)
+
+    return {
+        "success": True,
+        "is_verified": vendor.is_verified
+    }
+
+# ==========================================
+# REJECT VENDOR
+# ==========================================
+
+@router.patch(
+    "/{vendor_id}/reject"
+)
+def reject_vendor_api(
+
+    vendor_id: UUID,
+
+    db: Session = Depends(get_db),
+
+    current_user: User = Depends(
+        require_role(["admin"])
+    )
+
+):
+
+    from app.repositories.vendor_repository import get_vendor_by_id
+
+    vendor = get_vendor_by_id(db, vendor_id)
+
+    if not vendor:
+        raise HTTPException(
+            status_code=404,
+            detail="Vendor not found"
+        )
+
+    vendor.is_rejected = True
+    vendor.is_verified = False
+
+    db.commit()
+
+    db.refresh(vendor)
+
+    return {
+        "success": True,
+        "is_rejected": vendor.is_rejected,
+        "message": "Vendor rejected"
+    }
+
+# ==========================================
+# RESTORE REJECTED VENDOR
+# ==========================================
+
+@router.patch(
+    "/{vendor_id}/restore"
+)
+def restore_vendor_api(
+
+    vendor_id: UUID,
+
+    db: Session = Depends(get_db),
+
+    current_user: User = Depends(
+        require_role(["admin"])
+    )
+
+):
+
+    from app.repositories.vendor_repository import get_vendor_by_id
+
+    vendor = get_vendor_by_id(db, vendor_id)
+
+    if not vendor:
+        raise HTTPException(
+            status_code=404,
+            detail="Vendor not found"
+        )
+
+    vendor.is_rejected = False
+
+    db.commit()
+
+    db.refresh(vendor)
+
+    return {
+        "success": True,
+        "is_rejected": vendor.is_rejected,
+        "message": "Vendor restored to pending review"
+    }
+
+@router.get("/admin/stats")
+def get_admin_stats_api(
+
+    db: Session = Depends(get_db),
+
+    current_user: User = Depends(
+        require_role(["admin"])
+    )
+
+):
+
+    total_users = db.query(User).count()
+
+    active_users = (
+        db.query(User)
+        .filter(User.is_active == True)
+        .count()
+    )
+
+    return {
+        "success": True,
+        "total_users": total_users,
+        "active_users": active_users
+    }

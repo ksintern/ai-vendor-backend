@@ -1,8 +1,13 @@
 from uuid import UUID
 
-from fastapi import HTTPException
+import io
+
+import pandas as pd
+
+from fastapi import HTTPException, UploadFile
 
 from sqlalchemy.orm import Session
+from sqlalchemy import text
 
 from app.models.vendor import Vendor
 from app.models.service import Service
@@ -19,14 +24,18 @@ from app.repositories.vendor_repository import (
     create_service,
     service_exists,
     get_services_by_category,
-    get_service_by_id
+    get_service_by_id,
+
+    bulk_create_vendors,
+    email_exists
 
 )
 
 from app.schemas.vendor_schema import (
 
     VendorProfileUpdateRequest,
-    CreateVendorRequest
+    CreateVendorRequest,
+    VendorImportItem
 
 )
 
@@ -817,6 +826,32 @@ def search_vendors_service(
 
     )
 
+    min_price = filters.get("min_price")
+    max_price = filters.get("max_price")
+
+    if min_price is not None and max_price is not None:
+
+        if min_price == 0 and max_price == 0:
+            raise HTTPException(
+                status_code=400,
+                detail="Please enter a valid price range"
+            )
+
+        if max_price <= min_price:
+            raise HTTPException(
+                status_code=400,
+                detail="Maximum price must be greater than minimum price"
+            )
+
+        if (max_price - min_price) < 500:
+            raise HTTPException(
+                status_code=400,
+                detail="Price range must be at least ₹500"
+            )
+
+    if filters.get("rating") is not None:
+        filters["rating"] = float(filters["rating"])
+
     vendors, total = (
 
         search_vendors(
@@ -891,6 +926,8 @@ def get_single_vendor_service(
     return {
 
         "success": True,
+
+        "message": "Vendor fetched successfully",
 
         "vendor": vendor
 
@@ -985,6 +1022,57 @@ def deactivate_vendor_service(
             "Vendor not found"
 
         )
+
+    vid = str(vendor_id)
+
+    db.execute(
+        text("UPDATE user_preferences SET favorite_vendor_id = NULL WHERE favorite_vendor_id = :vid"),
+        {"vid": vid}
+    )
+    db.execute(
+        text("DELETE FROM recommendation_history WHERE vendor_id = :vid"),
+        {"vid": vid}
+    )
+    db.execute(
+        text("DELETE FROM recommendation_metadata WHERE vendor_id = :vid"),
+        {"vid": vid}
+    )
+    db.execute(
+        text("DELETE FROM reviews WHERE vendor_id = :vid"),
+        {"vid": vid}
+    )
+    db.execute(
+        text("DELETE FROM saved_vendors WHERE vendor_id = :vid"),
+        {"vid": vid}
+    )
+    db.execute(
+        text("DELETE FROM semantic_embeddings WHERE vendor_id = :vid"),
+        {"vid": vid}
+    )
+    db.execute(
+        text("DELETE FROM vendor_follows WHERE vendor_id = :vid"),
+        {"vid": vid}
+    )
+    db.execute(
+        text("DELETE FROM vendor_media WHERE vendor_id = :vid"),
+        {"vid": vid}
+    )
+    db.execute(
+        text("DELETE FROM vendor_services WHERE vendor_id = :vid"),
+        {"vid": vid}
+    )
+    db.execute(
+        text("DELETE FROM viewed_vendors WHERE vendor_id = :vid"),
+        {"vid": vid}
+    )
+    db.execute(
+        text("DELETE FROM pricing_models WHERE vendor_id = :vid"),
+        {"vid": vid}
+    )
+    db.execute(
+        text("DELETE FROM notifications WHERE vendor_id = :vid"),
+        {"vid": vid}
+    )
 
     db.delete(
 
@@ -1330,3 +1418,206 @@ def delete_service_service(
         "Service deleted successfully"
 
     }
+
+# =====================================================
+# IMPORT VENDORS
+# =====================================================
+
+import logging
+
+logger = logging.getLogger(__name__)
+
+def import_vendors_service(
+    db: Session,
+    vendors_data: list[VendorImportItem]
+):
+
+    logger.info(
+        f"Vendor import started — total records: {len(vendors_data)}"
+    )
+
+    valid_vendors = []
+    errors = []
+
+    for index, item in enumerate(vendors_data):
+
+        label = f"Record {index + 1} ({item.name})"
+
+        # --- Name check ---
+        if not item.name or not item.name.strip():
+            errors.append(f"{label}: Name is required")
+            continue
+
+        # --- City check ---
+        if not item.city or not item.city.strip():
+            errors.append(f"{label}: City is required")
+            continue
+
+        # --- Category check ---
+        if not item.category or not item.category.strip():
+            errors.append(f"{label}: Category is required")
+            continue
+
+        # --- Price check ---
+        if (
+            item.price_min is not None
+            and item.price_max is not None
+            and item.price_min > item.price_max
+        ):
+            errors.append(
+                f"{label}: price_min cannot exceed price_max"
+            )
+            continue
+
+        if item.price_min is not None and item.price_min < 0:
+            errors.append(f"{label}: price_min cannot be negative")
+            continue
+
+        if item.price_max is not None and item.price_max < 0:
+            errors.append(f"{label}: price_max cannot be negative")
+            continue
+
+        # --- Duplicate email check ---
+        if email_exists(db, item.business_email):
+            errors.append(
+                f"{label}: Email '{item.business_email}' already exists"
+            )
+            continue
+
+        # --- Build vendor dict ---
+        valid_vendors.append({
+            "name":           item.name.strip(),
+            "business_email": item.business_email,
+            "contact_phone":  item.contact_phone,
+            "city":           item.city.strip() if item.city else None,
+            "address":        item.address.strip() if item.address else None,
+            "description":    item.description.strip() if item.description else None,
+            "price_min":      item.price_min,
+            "price_max":      item.price_max,
+            "is_available":   item.is_available,
+            "is_active":      True,
+            "is_verified":    item.is_verified,
+            "avg_rating":     item.avg_rating,
+            "review_count":   item.review_count,
+            "parent_vendor_id": None,
+        })
+
+    # --- Bulk insert valid records ---
+    imported = 0
+
+    if valid_vendors:
+        try:
+            bulk_create_vendors(db, valid_vendors)
+            imported = len(valid_vendors)
+            logger.info(f"Vendor import success — imported: {imported}")
+        except Exception as e:
+            logger.error(f"Vendor import failed during DB insert: {str(e)}")
+            raise HTTPException(
+                status_code=500,
+                detail=f"Database error during import: {str(e)}"
+            )
+
+    failed = len(errors)
+
+    if failed:
+        logger.warning(
+            f"Vendor import — {failed} record(s) skipped: {errors}"
+        )
+
+    logger.info(
+        f"Vendor import complete — "
+        f"total: {len(vendors_data)}, "
+        f"imported: {imported}, "
+        f"failed: {failed}"
+    )
+
+    return {
+        "success": True,
+        "total":    len(vendors_data),
+        "imported": imported,
+        "failed":   failed,
+        "errors":   errors
+    }
+
+# =====================================================
+# CSV / EXCEL FILE IMPORT
+# =====================================================
+
+async def import_vendors_from_file_service(
+    db: Session,
+    file: UploadFile
+):
+
+    logger.info(f"File upload started — filename: {file.filename}")
+
+    if not file.filename:
+        raise HTTPException(
+            status_code=400,
+            detail="Filename is missing"
+        )
+
+    filename = file.filename.lower()
+
+    if not (filename.endswith(".csv") or filename.endswith(".xlsx")):
+        raise HTTPException(
+            status_code=400,
+            detail="Only .csv and .xlsx files are supported"
+        )
+
+    contents = await file.read()
+
+    try:
+        if filename.endswith(".csv"):
+            df = pd.read_csv(io.BytesIO(contents))
+        else:
+            df = pd.read_excel(io.BytesIO(contents))
+    except Exception as e:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Failed to parse file: {str(e)}"
+        )
+
+    required_columns = {"name", "business_email", "contact_phone"}
+    missing = required_columns - set(df.columns)
+    if missing:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Missing required columns: {missing}"
+        )
+
+    df = df.where(pd.notnull(df), None)
+
+    logger.info(f"File parsed — total rows: {len(df)}")
+
+    vendors_data = []
+    errors_from_parsing = []
+    for row_num, (_, row) in enumerate(df.iterrows(), start=2):
+        try:
+            item = VendorImportItem(
+                name=str(row["name"]) if row["name"] is not None else "",
+                business_email=str(row["business_email"]) if row["business_email"] is not None else "",
+                contact_phone=str(row["contact_phone"]) if row["contact_phone"] is not None else "",
+                city=str(row["city"]) if row.get("city") is not None else None,
+                category=str(row["category"]) if row.get("category") is not None else None,
+                price_min=int(row["price_min"]) if row.get("price_min") is not None else None,
+                price_max=int(row["price_max"]) if row.get("price_max") is not None else None,
+                is_available=str(row.get("is_available", "true")).strip().lower() == "true",
+                is_verified=str(row.get("is_verified", "false")).strip().lower() == "true",
+                avg_rating=float(row["avg_rating"]) if row.get("avg_rating") is not None else 0.0,
+                review_count=int(row["review_count"]) if row.get("review_count") is not None else 0,
+            )
+            vendors_data.append(item)
+        except Exception as e:
+            errors_from_parsing.append(
+                f"Row {row_num}: Could not parse — {str(e)}"
+            )
+            continue
+
+    if errors_from_parsing:
+        logger.warning(
+            f"File parsing — {len(errors_from_parsing)} rows could not be parsed: {errors_from_parsing}"
+        )
+
+    logger.info(f"Rows converted to VendorImportItem — valid: {len(vendors_data)}")
+
+    return import_vendors_service(db=db, vendors_data=vendors_data)

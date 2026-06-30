@@ -509,56 +509,44 @@ def search_vendors(
 
     if category:
 
-        category_terms = [category]
+        CATEGORY_SEARCH_TERMS = {
+            "photography": ["photography", "photographer", "photo", "videography", "cinematography"],
+            "catering":    ["catering", "caterer", "caterers", "food", "chef"],
+            "decoration":  ["decoration", "decorator", "decorators", "decor", "floral", "styling"],
+            "venue":       ["venue", "banquet", "hall", "farmhouse", "resort", "lawn"],
+            "entertainment": ["entertainment", "entertainer", "anchor", "comedian", "performer"],
+            "dj":          ["dj", "disc jockey", "music", "sound"],
+            "music":       ["music", "musician", "band", "singer", "live music"],
+            "makeup":      ["makeup", "makeup artist", "bridal makeup"],
+            "planner":     ["planner", "event planner", "wedding planner"],
+        }
 
-        if category.lower() in [
-            "decoration",
-            "decorator",
-            "decorators",
-            "decor"
-        ]:
-            category_terms = [
-                "decoration",
-                "decorators"
-            ]
-
-        elif category.lower() in [
-            "photography",
-            "photographer",
-            "photographers",
-            "photoshoot"
-        ]:
-            category_terms = [
-                "photography"
-            ]
-
-        elif category.lower() in [
-            "catering",
-            "caterer",
-            "caterers",
-            "cater"
-        ]:
-            category_terms = [
-                "catering"
-            ]
+        category_terms = CATEGORY_SEARCH_TERMS.get(
+            category.lower(),
+            [category]
+        )
 
         search = search.filter(
 
             or_(
 
                 *[
-                    CategoryVendor.name.ilike(
-                        f"%{term}%"
-                    )
-
+                    CategoryVendor.name.ilike(f"%{term}%")
                     for term in category_terms
                 ],
 
                 *[
-                    ServiceAlias.service_name.ilike(
-                        f"%{term}%"
-                    )
+                    ServiceAlias.service_name.ilike(f"%{term}%")
+                    for term in category_terms
+                ],
 
+                *[
+                    Vendor.name.ilike(f"%{term}%")
+                    for term in category_terms
+                ],
+
+                *[
+                    Vendor.description.ilike(f"%{term}%")
                     for term in category_terms
                 ]
 
@@ -578,24 +566,16 @@ def search_vendors(
 
         )
 
-    if min_price:
+    if min_price is not None:
 
         search=search.filter(
-
-            Vendor.price_max
-            >=
-            min_price
-
+            Vendor.price_max >= min_price
         )
 
-    if max_price:
+    if max_price is not None:
 
         search=search.filter(
-
-            Vendor.price_min
-            <=
-            max_price
-
+            Vendor.price_min <= max_price
         )
 
     search=search.group_by(
@@ -632,25 +612,32 @@ def search_vendors(
 
         )
 
-    total=search.count()
+    all_vendors=search.all()
 
-    vendors=(
+    if rating is not None:
 
-        search
+        min_rating = float(rating)
 
-        .offset(
+        all_vendors = [
 
-            (page-1)*limit
+            v for v in all_vendors
 
-        )
+            if (
+                v.avg_rating is not None
+                and float(v.avg_rating) >= min_rating
+            )
 
-        .limit(limit)
+        ]
 
-        .all()
+    total = len(all_vendors)
 
-    )
+    vendors = all_vendors[
 
-    return vendors,total
+        (page-1)*limit : (page-1)*limit + limit
+
+    ]
+
+    return vendors, total
 
 
 # =====================================
@@ -698,7 +685,7 @@ def search_vendors_ai(
 
             page=1,
 
-            limit=10
+            limit=50
 
         )
 
@@ -707,91 +694,32 @@ def search_vendors_ai(
     print("AFTER DB QUERY - total:", total)
     print("AFTER DB QUERY - vendors:", [v.name for v in vendors])
 
-    pricing=filters.get(
-
-        "pricing_preference"
-
-    )
+    pricing = (filters.get("pricing_preference") or "").lower()
 
     if pricing:
 
-        filtered=[]
+        if pricing in {"premium", "luxury"}:
 
-        keywords={
+            vendors.sort(
+                key=lambda v: (
+                    float(v.avg_rating or 0),
+                    int(v.review_count or 0),
+                    float(v.price_max or 0),
+                    bool(v.is_verified)
+                ),
+                reverse=True
+            )
 
-            "premium":[
+        elif pricing in {"budget", "cheap", "affordable"}:
 
-                "premium",
+            vendors.sort(
+                key=lambda v: (
+                    float(v.price_min or 0),
+                    -float(v.avg_rating or 0)
+                )   
+            )
 
-                "luxury"
-
-            ],
-
-            "luxury":[
-                "premium",
-                "luxury"
-            ],
-
-            "budget":[
-
-                "budget",
-
-                "cheap",
-
-                "affordable"
-
-            ],
-
-            "cheap":[
-                "budget",
-                "cheap",
-                "affordable"
-            ],
-
-            "affordable":[
-                "budget",
-                "cheap",
-                "affordable"
-            ]
-
-        }
-
-        allowed=keywords.get(
-
-            pricing,
-
-            []
-
-        )
-
-        if allowed:
-            matched = []
-            unmatched = []
-
-            for vendor in vendors:
-
-                text=(
-
-                    f"{vendor.name or ''} "
-
-                    f"{vendor.description or ''}"
-
-                ).lower()
-
-                if any(word in text for word in allowed):
-                    matched.append(vendor)
-                else:
-                    unmatched.append(vendor)
-
-            print("AFTER PRICING FILTER - vendors:", [v.name for v in vendors])
-            print("AFTER PRICING FILTER - total:", total)
-
-            # Prefer keyword-matched vendors, but fall back to all vendors
-            if matched:
-
-                vendors = matched + unmatched
-
-            total = len(vendors)
+        total = len(vendors)
 
     return {
 
@@ -970,3 +898,50 @@ def deactivate_vendor(
     db.commit()
 
     return vendor
+
+# =====================================
+# BULK IMPORT
+# =====================================
+
+def bulk_create_vendors(
+
+    db: Session,
+
+    vendors_data: list[dict]
+
+) -> list[Vendor]:
+
+    vendors = [
+        Vendor(**data)
+        for data in vendors_data
+    ]
+
+    try:
+        db.add_all(vendors)
+        db.commit()
+        for vendor in vendors:
+            db.refresh(vendor)
+        return vendors
+
+    except Exception:
+        db.rollback()
+        raise
+
+
+def email_exists(
+
+    db: Session,
+
+    email: str
+
+) -> bool:
+
+    return (
+        db.query(Vendor)
+        .filter(
+            func.lower(Vendor.business_email)
+            ==
+            email.strip().lower()
+        )
+        .first()
+    ) is not None

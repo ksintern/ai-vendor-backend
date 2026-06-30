@@ -36,6 +36,13 @@ class ContextAgent:
             conversation_context = ""
             user_preferences = {}
 
+            from app.services.agent_configuration_service import AgentConfigurationService
+            context_cfg = AgentConfigurationService.get_configuration_by_agent_name(
+                db, "context_agent"
+            ) if db else None
+            context_config = context_cfg.configuration if context_cfg else {}
+            state["context_config"] = context_config
+
             # -----------------------------------
             # OPTIMIZATION: Skip both DB calls
             # for intents that never use them
@@ -81,7 +88,12 @@ class ContextAgent:
                         f"| length={len(conversation_context)}"
                     )
                 except Exception as ce:
-                    logger.warning(f"[ContextAgent] Failed to fetch conversation context: {ce}")
+                    if db:
+                        db.rollback()
+                    logger.warning(
+                        f"[ContextAgent] Failed to fetch conversation context: {ce}"
+                    )
+
                     conversation_context = ""
 
             # -----------------------------------
@@ -103,7 +115,12 @@ class ContextAgent:
                         f"[ContextAgent] user_preferences fetched for user_id={user_id}"
                     )
                 except Exception as pe:
-                    logger.warning(f"[ContextAgent] Failed to fetch user preferences: {pe}")
+                    if db:
+                        db.rollback()
+                    logger.warning(
+                        f"[ContextAgent] Failed to fetch user preferences: {pe}"
+                    )
+
                     user_preferences = {}
 
             state["conversation_context"] = conversation_context

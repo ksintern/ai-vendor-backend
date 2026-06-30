@@ -77,13 +77,13 @@ class AIService:
     # OLLAMA SAFE SETTINGS
     # -----------------------------------
 
-    MAX_RETRIES = 1
+    MAX_RETRIES = 3
 
-    REQUEST_TIMEOUT = 180
+    REQUEST_TIMEOUT = 180  
 
     TEMPERATURE = 0.7
 
-    MAX_OUTPUT_TOKENS = 250
+    MAX_OUTPUT_TOKENS = 200
 
     def __init__(
 
@@ -116,6 +116,11 @@ class AIService:
             .lower()
 
         )
+
+        self._system_prompt = None
+
+    def set_system_prompt(self, prompt: str):
+        self._system_prompt = prompt
 
     async def execute_prompt(
 
@@ -209,36 +214,19 @@ class AIService:
 
                     )
 
-                    break
-
                     print("== AI CALL END ==")
+                    break
 
                 except Exception as e:
 
-                    logger.warning(
-
-                        f"AI retry {attempt + 1} failed"
-
+                    logger.exception(
+                        f"AI retry {attempt + 1} failed: {repr(e)}"
                     )
 
-                    if (
-
-                        attempt
-
-                        >=
-
-                        self.MAX_RETRIES
-
-                    ):
-
+                    if attempt >= self.MAX_RETRIES:
                         raise
 
-                    await asyncio.sleep(
-
-                        1
-
-                    )
-
+                    await asyncio.sleep(5)
             if not response:
 
                 raise RuntimeError(
@@ -349,8 +337,11 @@ class AIService:
         self,
         user_message: str,
         previous: Optional[Dict] = None,
-        conversation_context: str = ""
+        conversation_context: str = "",
+        override_system_prompt: Optional[str] = None,
+        qa_config: Optional[Dict] = None
     ):
+        qa_config = qa_config or {}
 
         # -----------------------------------
         # PREPROCESS QUERY
@@ -366,23 +357,78 @@ class AIService:
         # PARSER FILTERS
         # -----------------------------------
 
-        parser_filters = dict(
-            QueryParser.extract_filters(
+        parser_filters = {
+            "_raw_query": user_message,
+            **QueryParser.extract_filters(
                 normalized_query,
-                previous
+                previous,
+                qa_config
             )
-        )
+        }
+
+        # Define these immediately after parser_filters
+        # so they are available everywhere below
+        has_category = bool(parser_filters.get("category"))
+        has_city = bool(parser_filters.get("city"))
 
         # -----------------------------------
         # PROMPT CHAIN
         # -----------------------------------
 
-        chain = PromptChain.build(normalized_query, previous or {})
+        chain = PromptChain.build(
+            normalized_query,
+            previous or {}
+        )
 
-# Intent extracted BEFORE context injection ← FIX
+        # -----------------------------------
+        # INTENT — extracted from clean query
+        # BEFORE context injection
+        # -----------------------------------
+
         intent_data = IntentExtractor.extract(normalized_query)
         intent = intent_data.get("intent", "vendor_recommendation")
         intent_filters = intent_data.get("filters", {})
+        if intent == "comparison_query":
+            from app.ai.query_parser import QueryParser as QP
+            raw_vendor_names = QP._extract_vendor_names(user_message)  # raw, not normalized
+            if raw_vendor_names:
+                intent_filters["vendor_names"] = raw_vendor_names
+                intent_filters["comparison_request"] = True
+
+        # -----------------------------------
+        # EARLY VALIDATION
+        # Runs before Ollama — invalid queries
+        # never reach LLM
+        # -----------------------------------
+
+        from app.ai.query_validator import QueryValidator
+
+        early_validation = QueryValidator.validate(
+            intent,
+            parser_filters,
+            qa_config
+        )
+
+        if (
+            not early_validation.get("is_valid", True)
+            or early_validation.get("errors")
+        ):
+            return {
+                "intent": intent,
+                "filters": parser_filters,
+                "validation": early_validation,
+                "errors": early_validation.get("errors", []),
+                "needs_clarification": False,
+                "missing_fields": [],
+                "search_payload": {},
+                "normalized_query": normalized_query
+            }
+
+        # -----------------------------------
+        # CONTEXT INJECTION
+        # After validation — context words
+        # won't affect intent classification
+        # -----------------------------------
 
         if conversation_context:
             normalized_query = (
@@ -392,30 +438,35 @@ class AIService:
                 f"{normalized_query}"
             )
 
+        # -----------------------------------
+        # LLM FILTER EXTRACTION
+        # Only called when filters incomplete
+        # Skipped for complete queries
+        # -----------------------------------
+
         llm_filters = {}
-        has_category = bool(parser_filters.get("category"))
-        has_city = bool(parser_filters.get("city"))
-        if not (has_category and has_city) and intent != "comparison_query":
+
+        needs_llm_extraction = (
+            intent != "comparison_query"
+            and not (
+                has_category
+                or parser_filters.get("vendor_names")
+                or parser_filters.get("comparison_request")
+            )
+        )
+
+        if needs_llm_extraction:
             for step in chain:
-                if (
-                    step["stage"]
-                    ==
-                    "filter_extraction"
-                ):
+                if step["stage"] == "filter_extraction":
+                    if override_system_prompt and override_system_prompt.strip():
+                        self.set_system_prompt(override_system_prompt)
+
                     llm_filters = await (
                         self._extract_llm_filters(
                             normalized_query
                         )
                     )
                     break
-        
-        intent_filters = (
-            intent_data.get(
-                "filters",
-                {}
-            )
-        )
-
         final_filters = {
             **parser_filters
         }
@@ -465,7 +516,8 @@ class AIService:
         validation = (
             QueryValidator.validate(
                 intent,
-                final_filters
+                final_filters,
+                qa_config
             )
         )
 
@@ -503,7 +555,7 @@ class AIService:
         structured = (
             StructuredResponseBuilder.build(
                 parser_filters=
-                parser_filters,
+                final_filters,
 
                 llm_filters=
                 llm_filters,
@@ -796,17 +848,7 @@ class AIService:
 
                             "role": "system",
 
-                            "content":
-
-                            (
-                                "You are a warm, friendly, and emotionally intelligent "
-                                "event planning assistant. "
-                                "Adapt your tone based on the user's event type, budget, "
-                                "preferences, and context. "
-                                "Be conversational, natural, and engaging. "
-                                "Use occasional emojis when appropriate. "
-                                "Avoid robotic responses."
-                            )
+                            "content": self._system_prompt or PromptLoader.get_prompt("ai_service_system")
 
                         },
 

@@ -1,5 +1,7 @@
 import uuid
 import time
+import logging
+logger = logging.getLogger(__name__)
 
 from sqlalchemy.orm import Session
 
@@ -45,12 +47,23 @@ class ChatService:
         "affordable"
     }
 
-    MAX_VENDOR_CARDS = 3
+    MAX_VENDOR_CARDS = 5
 
     def __init__(self, db: Session):
         self.db = db
         self.ai_service = AIService()
         self.graph_service = GraphService()
+        try:
+            from app.services.agent_configuration_service import AgentConfigurationService
+            disc_cfg = AgentConfigurationService.get_configuration_by_agent_name(
+                db, "discovery_agent"
+            )
+            self.MAX_VENDOR_CARDS = (
+                disc_cfg.configuration.get("max_vendor_cards", 5)
+                if disc_cfg else 5
+            )
+        except Exception:
+            self.MAX_VENDOR_CARDS = 5
 
     async def process_message(
         self,
@@ -194,22 +207,93 @@ class ChatService:
                     f"USER HISTORY:\n{user_history_trimmed}"
                 ).strip()
 
+                qa_config = {}
+                try:
+                    from app.services.agent_configuration_service import AgentConfigurationService
+                    qa_cfg = AgentConfigurationService.get_configuration_by_agent_name(
+                        self.db, "query_analysis_agent"
+                    )
+                    raw_qa = qa_cfg.configuration if qa_cfg else {}
+                    # Flatten nested configuration if present
+                    while isinstance(raw_qa, dict) and "configuration" in raw_qa:
+                        raw_qa = raw_qa["configuration"]
+                    qa_config = raw_qa
+                except Exception:
+                    qa_config = {}
+
                 structured = await self.ai_service.build_structured_response(
                     user_message,
                     previous,
-                    combined_context
+                    combined_context,
+                    qa_config=qa_config
                 )
 
+                # Early validation error — return as chat message, not API error
+                errors = structured.get("errors", [])
+                if errors:
+                    error_message = errors[0]
+                    ConversationService.create_conversation(
+                        db=self.db,
+                        session_id=session_id,
+                        user_id=current_user.user_id,
+                        user_message=user_message,
+                        ai_response=error_message,
+                        detected_intent="validation_error",
+                        applied_filters={},
+                        is_follow_up=False,
+                        context_summary="Validation error"
+                    )
+                    return {
+                        "success": True,
+                        "message": error_message,
+                        "ai_response": error_message,
+                        "session_id": session_id,
+                        "response_type": "validation_error",
+                        "current_question": None,
+                        "missing_fields": [],
+                        "recommendations": [],
+                        "error": None
+                    }
+
             except Exception:
+                import traceback
+                traceback.print_exc()
                 structured = {
                     "filters": previous or {},
                     "intent": "vendor_recommendation",
-                    "missing_fields": []
+                    "missing_fields": [],
+                    "errors": []
                 }
 
             filters = structured.get("filters", {})
+            extra_cities = qa_config.get("extra_cities", {})
+            if extra_cities and filters.get("city"):
+                city_raw = str(filters["city"]).lower().strip()
+                if city_raw in extra_cities:
+                    filters = {**filters, "city": extra_cities[city_raw].lower()}
             intent = structured.get("intent")
+            validation = structured.get("validation", {})
 
+            errors = (
+                structured.get("errors", [])
+                or validation.get("errors", [])
+            )
+
+            if errors:
+                assistant = errors[0]
+                SessionManager.add_message(
+                    session_id, "assistant", assistant
+                )
+                return {
+                    "success": False,
+                    "message": assistant,
+                    "session_id": session_id,
+                    "response_type": "validation_error",
+                    "current_question": None,
+                    "missing_fields": [],
+                    "recommendations": [],
+                    "error": assistant
+                }
             filters = {
                 k: v
                 for k, v in filters.items()
@@ -229,6 +313,13 @@ class ChatService:
                 session_id,
                 filters
             )
+
+            if filters and intent != "session_query":
+                UserPreferenceService.learn_from_chat(
+                    db=self.db,
+                    user_id=current_user.user_id,
+                    filters=filters
+                )
 
             # -----------------------------------
             # REFINEMENT FLOW
@@ -278,7 +369,8 @@ class ChatService:
                     ConversationOrchestrator.build_session_state(
                         filters=filters,
                         missing_fields=missing_fields,
-                        intent=intent
+                        intent=intent,
+                        config=qa_config
                     )
                 )
 
@@ -333,12 +425,6 @@ class ChatService:
 
                 if intent != "session_query":
 
-                    UserPreferenceService.learn_from_chat(
-                        db=self.db,
-                        user_id=current_user.user_id,
-                        filters=filters
-                    )
-
                     preference = (
                         UserPreferenceService.get_user_preferences(
                             db=self.db,
@@ -385,6 +471,19 @@ class ChatService:
 
                 if USE_REASONING_GRAPH:
 
+    # For comparison queries, always re-extract vendor_names
+    # from the raw query using rule-based extractor.
+    # LLM extraction is unreliable for proper vendor names.
+                    if intent == "comparison_query":
+                        from app.ai.intent_extractor import IntentExtractor
+                        rule_based_names = IntentExtractor._extract_vendor_names(user_message)
+                        if rule_based_names and len(rule_based_names) >= 2:
+                            filters["vendor_names"] = rule_based_names
+                            logger.info(
+                                f"[ChatService] Overriding vendor_names from rule-based extractor: "
+                                f"{rule_based_names}"
+                            )
+
                     graph_result = await self.graph_service.process(
                         query=user_message,
                         session_id=session_id,
@@ -394,6 +493,26 @@ class ChatService:
                         intent=intent,       
                         filters=filters,    
                     )
+
+                    # ── Task 34: Vendor API failure propagation ──────────
+                    if graph_result.get("tool_status") == "failed":
+                        tool_error = graph_result.get(
+                            "tool_error",
+                            "Vendor service is temporarily unavailable."
+                        )
+                        logger.error(f"[ChatService] Tool failure detected: {tool_error}")
+                        return {
+                            "success": False,
+                            "message": "Vendor service is temporarily unavailable. Please try again shortly.",
+                            "session_id": session_id,
+                            "response_type": "error",
+                            "error_code": "VENDOR_API_FAILURE",
+                            "current_question": None,
+                            "missing_fields": [],
+                            "recommendations": [],
+                            "error": tool_error
+                        }
+                    # ─────────────────────────────────────────────────────
 
                     recommendations = (
                         graph_result.get(
@@ -495,7 +614,12 @@ class ChatService:
                         detected_intent=intent,
                         applied_filters=filters,
                         is_follow_up=False,
-                        context_summary="Vendor recommendations generated"
+                        context_summary="Vendor recommendations generated",
+                        recommendations=
+                            RecommendationFormatter.format_vendors(
+                                recommendations[:self.MAX_VENDOR_CARDS],
+                                filters
+                            )
                     )
 
                     for vendor in recommendations:
@@ -579,11 +703,9 @@ class ChatService:
             }
 
         except Exception as e:
-
-            print(
-                "CHAT ERROR:",
-                str(e)
-            )
+            import traceback
+            traceback.print_exc()
+            print("CHAT ERROR:", str(e))
 
             print(
                 f"TOTAL REQUEST TIME: {round(time.time() - start_time, 2)}s"
@@ -666,11 +788,20 @@ class ChatService:
         if not filters.get("city"):
             return "city"
 
-        if category == "catering":
+        # Categories that require budget
+        BUDGET_REQUIRED = {
+            "catering", "photography", "decoration",
+            "music", "makeup", "venue", "planner", "dj"
+        }
 
+        if category in BUDGET_REQUIRED:
             if not filters.get("budget"):
                 return "budget"
 
+        # Categories that also require guest count
+        GUEST_COUNT_REQUIRED = {"catering", "venue"}
+
+        if category in GUEST_COUNT_REQUIRED:
             if not filters.get("guest_count"):
                 return "guest_count"
 

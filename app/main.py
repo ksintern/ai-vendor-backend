@@ -55,6 +55,10 @@ from app.api.routes.reasoning_test import (
     router as reasoning_router
 )
 
+from app.api.routes.admin_agent_routes import router as admin_agent_router
+from app.api.routes.vendor_cleanup_routes import router as vendor_cleanup_router
+from app.api.routes.vendor_sync_routes import router as vendor_sync_router
+
 # =====================================
 # EXCEPTION HANDLERS
 # =====================================
@@ -133,6 +137,9 @@ from app.models.vendor_service import (
     VendorService
 )
 
+from app.models.vendor_cleanup_log import VendorCleanupLog
+from app.models.vendor_cleanup_report import VendorCleanupReport
+from app.services.scheduler_service import start_scheduler
 
 # =====================================
 # CREATE TABLES
@@ -144,6 +151,40 @@ Base.metadata.create_all(
 
 )
 
+# =====================================
+# STARTUP — OLLAMA WARMUP
+# =====================================
+
+from contextlib import asynccontextmanager
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # STARTUP — warm up Ollama in background
+    async def _warm_up():
+        try:
+            import httpx
+            from app.core.config import settings
+            if settings.AI_PROVIDER.lower() != "ollama":
+                return
+            async with httpx.AsyncClient(timeout=120.0) as client:
+                r = await client.post(
+                    "http://localhost:11434/api/generate",
+                    json={
+                        "model": settings.AI_MODEL,
+                        "prompt": "hi",
+                        "stream": False,
+                        "keep_alive": "10m"
+                    }
+                )
+            print(f"✅ Ollama '{settings.AI_MODEL}' warmed up successfully")
+        except Exception as e:
+            print(f"⚠️ Ollama warmup failed (non-fatal): {e}")
+
+    import asyncio
+    asyncio.ensure_future(_warm_up())
+    start_scheduler()
+    yield
+    # SHUTDOWN — nothing needed
 
 # =====================================
 # APP
@@ -153,7 +194,9 @@ app = FastAPI(
 
     title="AI Vendor Discovery Agent API",
 
-    version="1.0.0"
+    version="1.0.0",
+
+    lifespan=lifespan
 
 )
 
@@ -247,8 +290,6 @@ app.exception_handler(
     internal_exception_handler
 
 )
-
-
 # =====================================
 # ROOT
 # =====================================
@@ -319,11 +360,11 @@ app.include_router(
 
 )
 
-app.include_router(
+# app.include_router(
 
-    category_router
+#     category_router
 
-)
+# )
 
 app.include_router(
 
@@ -355,4 +396,16 @@ app.include_router(
 
 app.include_router(
     reasoning_router
+)
+
+app.include_router(
+    admin_agent_router
+)
+
+app.include_router(
+    vendor_cleanup_router
+)
+
+app.include_router(
+    vendor_sync_router
 )

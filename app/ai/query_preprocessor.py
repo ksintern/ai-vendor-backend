@@ -17,6 +17,8 @@ class QueryPreprocessor:
         "photography": [
             "photographer",
             "photographers",
+            "photo",
+            "photos",
             "wedding shoot",
             "camera crew",
             "photo team"
@@ -61,7 +63,6 @@ class QueryPreprocessor:
         "premium": [
             "luxury",
             "premium",
-            "elite",
             "high end",
             "high-end",
             "exclusive"
@@ -116,23 +117,52 @@ class QueryPreprocessor:
 
         return query
 
-    @staticmethod
-    def _clean_text(
-        query: str
+    @classmethod
+    def preprocess_with_config(
+        cls,
+        query: str,
+        config: dict = None
     ) -> str:
+        """Preprocess with admin-configured extra city aliases applied first."""
+        if not query:
+            return ""
 
+        query = query.lower().strip()
+
+        # Apply admin-configured city aliases BEFORE standard normalization
+        if config:
+            extra_cities = config.get("extra_cities", {})
+            for alias, canonical in extra_cities.items():
+                query = re.sub(
+                    rf"\b{re.escape(alias.lower())}\b",
+                    canonical.lower(),
+                    query
+                )
+
+        # Then run standard preprocessing
+        query = cls._normalize_budget(query)
+        query = cls._normalize_locations(query)
+        query = cls._normalize_categories(query)
+        query = cls._normalize_preferences(query)
+        query = cls._clean_text(query)
+
+        return query
+
+    @staticmethod
+    def _clean_text(query: str) -> str:
+    # Preserve minus sign before numbers for negative value detection
         query = re.sub(
-            r"[^\w\s]",
+            r"[^\w\s\-]",
             " ",
             query
         )
-
+    # Clean up orphan hyphens (not followed by digits)
         query = re.sub(
-            r"\s+",
+            r"-(?!\d)",
             " ",
             query
         )
-
+        query = re.sub(r"\s+", " ", query)
         return query.strip()
 
     @classmethod

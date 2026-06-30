@@ -3,53 +3,32 @@ class RecommendationFormatter:
     @staticmethod
     def build_reason(vendor, filters):
 
-        category = filters.get(
-            "category"
-        )
+        pricing = filters.get("pricing_preference")
 
-        pricing = filters.get(
-            "pricing_preference"
-        )
+        rating = getattr(vendor, "avg_rating", 0) or 0
+        review_count = getattr(vendor, "review_count", 0) or 0
 
-        rating = getattr(
-            vendor,
-            "avg_rating",
-            0
-        ) or 0
-
-        review_count = getattr(
-            vendor,
-            "review_count",
-            0
-        ) or 0
+    # Get category from vendor's teams
+        teams = getattr(vendor, "managed_teams", []) or []
+        team = teams[0] if teams else None
+        if team:
+            category = team["name"] if isinstance(team, dict) else getattr(team, "name", "Vendor")
+        else:
+            category = filters.get("category", "Vendor").title() if filters.get("category") else "Vendor"
 
         if pricing == "premium":
-
-            return (
-                "Premium vendor matching your requirements"
-            )
+            return "Premium vendor matching your requirements"
 
         if pricing == "budget":
-
-            return (
-                "Budget-friendly option within your range"
-            )
+            return "Budget-friendly option within your range"
 
         if rating >= 4.5:
-
-            return (
-                f"Highly rated {category} vendor with excellent customer reviews"
-            )
+            return f"Highly rated {category} vendor with excellent customer reviews"
 
         if review_count >= 20:
+            return f"Popular {category} vendor with strong customer engagement"
 
-            return (
-                f"Popular {category} vendor with strong customer engagement"
-            )
-
-        return (
-            f"Recommended {category} vendor based on your search"
-        )
+        return f"Recommended {category} vendor based on your search"
 
     @staticmethod
     def format_vendor(vendor, filters=None):
@@ -72,12 +51,8 @@ class RecommendationFormatter:
                 []
             ) or []
 
-            category = (
-                teams[0].name
-                if teams
-                else None
-            )
-
+            team = teams[0] if teams else None
+            category = team["name"] if isinstance(team, dict) else (team.name if team else None)
         print(
             "FORMATTER:",
             vendor.name,
@@ -98,7 +73,7 @@ class RecommendationFormatter:
 
             "category": category,
 
-            "city": vendor.city,
+            "city": vendor.city or "",
 
             "rating": float(
                 getattr(

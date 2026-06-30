@@ -180,13 +180,7 @@ class StructuredResponseBuilder:
 
         if not category:
 
-            missing.append(
-
-                "category"
-
-            )
-
-            return missing
+            return ["category"]
 
         # ----------------------------------
         # LOCATION
@@ -226,11 +220,9 @@ class StructuredResponseBuilder:
 
         ):
 
-            if not filters.get(
-
+            if filters.get(
                 "budget"
-
-            ):
+            ) is None:
 
                 missing.append(
 
@@ -238,11 +230,9 @@ class StructuredResponseBuilder:
 
                 )
 
-            if not filters.get(
-
+            if filters.get(
                 "guest_count"
-
-            ):
+            ) is None:
 
                 missing.append(
 
@@ -292,11 +282,11 @@ class StructuredResponseBuilder:
 
         ):
 
-            if not filters.get(
+            if filters.get(
 
                 "budget"
 
-            ):
+            ) is None:
 
                 missing.append(
 
